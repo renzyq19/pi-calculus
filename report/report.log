@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.1415926-2.4-1.40.13 (TeX Live 2012/Debian) (format=latex 2013.10.23)  27 JAN 2014 16:50
+This is pdfTeX, Version 3.1415926-2.4-1.40.13 (TeX Live 2012/Debian) (format=latex 2013.10.23)  27 JAN 2014 17:05
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -64,37 +64,15 @@ Package: trig 1999/03/16 v1.09 sin cos tan (DPC)
 (/usr/share/texlive/texmf-dist/tex/latex/latexconfig/graphics.cfg
 File: graphics.cfg 2010/04/23 v1.9 graphics configuration of TeX Live
 )
-Package graphics Info: Driver file: pdftex.def on input line 91.
+Package graphics Info: Driver file: dvips.def on input line 91.
 
-(/usr/share/texlive/texmf-dist/tex/latex/pdftex-def/pdftex.def
-File: pdftex.def 2011/05/27 v0.06d Graphics/color for pdfTeX
-
-(/usr/share/texlive/texmf-dist/tex/generic/oberdiek/infwarerr.sty
-Package: infwarerr 2010/04/08 v1.3 Providing info/warning/error messages (HO)
-)
-(/usr/share/texlive/texmf-dist/tex/generic/oberdiek/ltxcmds.sty
-Package: ltxcmds 2011/11/09 v1.22 LaTeX kernel commands for general use (HO)
-)
-
-! Package pdftex.def Error: PDF mode expected, but DVI mode detected!
-(pdftex.def)                If you are using `latex', then call `pdflatex'.
-(pdftex.def)                Otherwise check and correct the driver options.
-(pdftex.def)                Error recovery by switching to PDF mode.
-
-See the pdftex.def package documentation for explanation.
-Type  H <return>  for immediate help.
- ...                                              
-                                                  
-l.433   }\@ehc
-              
-Try typing  <return>  to proceed.
-If that doesn't work, type  X <return>  to quit.
-
-\Gread@gobject=\count90
+(/usr/share/texlive/texmf-dist/tex/latex/graphics/dvips.def
+File: dvips.def 1999/02/16 v3.0i Driver-dependant file (DPC,SPQR)
 ))
 \Gin@req@height=\dimen111
 \Gin@req@width=\dimen112
-) (/homes/wrd11/documents/pi-calculus/report/report.aux)
+)
+No file report.aux.
 \openout1 = `report.aux'.
 
 LaTeX Font Info:    Checking defaults for OML/cmm/m/it on input line 6.
@@ -109,10 +87,10 @@ LaTeX Font Info:    Checking defaults for OMX/cmex/m/n on input line 6.
 LaTeX Font Info:    ... okay on input line 6.
 LaTeX Font Info:    Checking defaults for U/cmr/m/n on input line 6.
 LaTeX Font Info:    ... okay on input line 6.
-
-*geometry* detected driver: pdftex
+*geometry* driver: auto-detecting
+*geometry* detected driver: dvips
 *geometry* verbose mode - [ preamble ] result:
-* driver: pdftex
+* driver: dvips
 * paper: a4paper
 * layout: <same size as paper>
 * layoutoffset:(h,v)=(0.0pt,0.0pt)
@@ -143,50 +121,38 @@ LaTeX Font Info:    ... okay on input line 6.
 * \@reversemarginfalse
 * (1in=72.27pt=25.4mm, 1cm=28.453pt)
 
-(/usr/share/texlive/texmf-dist/tex/context/base/supp-pdf.mkii
-[Loading MPS to PDF converter (version 2006.09.02).]
-\scratchcounter=\count91
-\scratchdimen=\dimen113
-\scratchbox=\box26
-\nofMPsegments=\count92
-\nofMParguments=\count93
-\everyMPshowfont=\toks16
-\MPscratchCnt=\count94
-\MPscratchDim=\dimen114
-\MPnumerator=\count95
-\makeMPintoPDFobject=\count96
-\everyMPtoPDFconversion=\toks17
-) (./title.tex <./assets/imperial.pdf, id=1, 290.08376pt x 77.28876pt>
-File: ./assets/imperial.pdf Graphic file (type pdf)
-
-<use ./assets/imperial.pdf>
-Package pdftex.def Info: ./assets/imperial.pdf used on input line 3.
-(pdftex.def)             Requested size: 317.07614pt x 84.48601pt.
+(./title.tex
+File: ./assets/imperial.eps Graphic file (type eps)
+ <./assets/imperial.eps>
 LaTeX Font Info:    External font `cmex10' loaded for size
 (Font)              <17.28> on input line 4.
 LaTeX Font Info:    External font `cmex10' loaded for size
 (Font)              <12> on input line 4.
  [1
 
-{/var/lib/texmf/fonts/map/pdftex/updmap/pdftex.map} <./assets/imperial.pdf>])
-(/homes/wrd11/documents/pi-calculus/report/report.aux) ) 
+])
+\openout2 = `./introduction.aux'.
+
+ (./introduction.tex)
+\openout2 = `./background.aux'.
+
+
+(./background.tex)
+\openout2 = `./plan.aux'.
+
+ (./plan.tex)
+\openout2 = `./evaluation.aux'.
+
+ (./evaluation.tex)
+(/homes/wrd11/documents/pi-calculus/report/report.aux (./introduction.aux)
+(./background.aux) (./plan.aux) (./evaluation.aux)) ) 
 Here is how much of TeX's memory you used:
- 1622 strings out of 494967
- 22300 string characters out of 3178697
- 77024 words of memory out of 3000000
- 4856 multiletter control sequences out of 15000+200000
+ 1051 strings out of 494967
+ 14243 string characters out of 3178697
+ 67526 words of memory out of 3000000
+ 4280 multiletter control sequences out of 15000+200000
  7623 words of font info for 27 fonts, out of 3000000 for 9000
  36 hyphenation exceptions out of 8191
- 28i,4n,32p,328b,186s stack positions out of 5000i,500n,10000p,200000b,50000s
-</usr/share/texlive/tex
-mf-dist/fonts/type1/public/amsfonts/cm/cmbx12.pfb></usr/share/texlive/texmf-dis
-t/fonts/type1/public/amsfonts/cm/cmcsc10.pfb></usr/share/texlive/texmf-dist/fon
-ts/type1/public/amsfonts/cm/cmr12.pfb></usr/share/texlive/texmf-dist/fonts/type
-1/public/amsfonts/cm/cmti12.pfb>
-Output written on report.pdf (1 page, 47399 bytes).
-PDF statistics:
- 27 PDF objects out of 1000 (max. 8388607)
- 18 compressed objects within 1 object stream
- 0 named destinations out of 1000 (max. 500000)
- 6 words of extra memory for PDF output out of 10000 (max. 10000000)
+ 26i,4n,32p,293b,214s stack positions out of 5000i,500n,10000p,200000b,50000s
 
+Output written on report.dvi (1 page, 800 bytes).
