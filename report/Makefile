@@ -1,4 +1,4 @@
-TEX = rubber
+TEX = rubber --pdf
 .PHONY: clean all
 
 all: report.pdf
