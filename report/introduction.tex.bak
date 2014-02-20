@@ -6,6 +6,33 @@ For the purposes of static analysis, models built using applied pi-calculus have
 
 Without an implementation, any models built using the applied pi-calculus cannot be used to actually demonstrate protocols they are modelling, and those models can be very difficult to debug.
 
-\subsection{Objectives}
+\subsection{Objective}
 
-The aim of this project is to provide an implementation of the applied pi-calculus such that one might be able to build a model of a web protocol and then execute it interoperably with existing implementations written in PHP, Javascript or any other web language. The resulting implementation will hopefully not only be a very powerful and concise language for reasoning about and implementing protocols, but a useful tool for tinkering online similar to a shell scripting language on Linux.   
+The aim of this project is to provide an implementation of the applied pi-calculus such that one might be able to build a model of a web protocol and then execute it interoperably with existing implementations written in PHP, Javascript or any other web language. The resulting implementation will hopefully not only be a very powerful and concise language for reasoning about and implementing protocols, but a useful scripting tool for the web.
+
+At the very least, we would like to be able to write something similar to:
+    
+\begin{verbatim}
+    in(a,M); 
+    out(b,M);
+\end{verbatim}
+
+And have it execute successfully; receiving a message in on channel a, and sending the same message out again on channel b. However, ideally we would like to write something like the following:
+
+\begin{verbatim}
+    out(net,httpRequest(uri,headers,httpGet()));
+    in(net,(head : Header, message : String));
+    out(stdout, resp);
+    |
+    in(net,(u: URI, h: Header, req: httpReq));
+    out(process,req);
+    in(process,resp);
+    out(net,httpResponse(origin(h),resp));
+\end{verbatim}
+
+which would start one process which would send  out an HTTP GET request on the channel net, and await a response. Once that response has been received, it will destructure it and send the contents of the HTTP Response to stdout. Meanwhile, another process is set up to receive the same request on net, destructure it into its component parts, then handle the request, and send back an appropriate HTTP response. The latter may well be out of the our abilities, however the we would aim to create something capable of handling something a little more impressive than the former.
+
+\subsection{Approach}
+
+We will be aiming to build 
+
