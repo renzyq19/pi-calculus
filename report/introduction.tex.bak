@@ -1,0 +1,11 @@
+\section{Introduction}
+
+The applied pi-calculus is an expressive formal language describing computations as communicating processes. Its primary use in both industry and academia is to model security protocols. These models being built, they can then be statically analysed either by hand, or automatically by using a tool such as ProVerif. 
+
+For the purposes of static analysis, models built using applied pi-calculus have proven very useful. However, they are limited by the fact that they cannot currently be executed, as there is no existing language implementation. 
+
+Without an implementation, any models built using the applied pi-calculus cannot be used to actually demonstrate protocols they are modelling, and those models can be very difficult to debug.
+
+\subsection{Objectives}
+
+The aim of this project is to provide an implementation of the applied pi-calculus such that one might be able to build a model of a web protocol and then execute it interoperably with existing implementations written in PHP, Javascript or any other web language. The resulting implementation will hopefully not only be a very powerful and concise language for reasoning about and implementing protocols, but a useful tool for tinkering online similar to a shell scripting language on Linux.   

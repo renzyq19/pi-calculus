@@ -1,7 +1,10 @@
 TEX = rubber --pdf
 .PHONY: clean all
 
-all: report.pdf
+all: clean spellcheck report.pdf
+
+spellcheck:
+	ispell -t *.tex
 
 report.pdf: report.aux 
 	$(TEX) report.tex
