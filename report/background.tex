@@ -1,18 +1,37 @@
 \section{Background}
-\subsection{CCS, $\pi$-calculus and the applied $\pi$-calculus}
+\subsection{Process Calculi}
 
-The applied $\pi$-calculus \cite{af01} is an extension of $\pi$-calculus \cite{mpw92} which itself as an extension of the work Robert Milner did on the Calculus of Communicating Systems (CCS) \cite{m82}. Here we will give a brief introduction to all three, and show how each extends upon the next.
-\[
-\begin{array}[b]{l l}
- P ::= & \emptyset \\
-  &a.P_{1}\\
-  &A\\
-  &P_{1} + P_{2} \\
-  &P_{1} | P_{2} \\
-  &P_{1} [\frac{b}{a}]\\
-  &P_{1} \backslash a 
-\end{array}
-\]
+Process calculi, sometimes referred to as process algebras are a family of languages and models for describing concurrent systems. They allow for the description of communication and synchronization between two or more concurrent processes. The algebraic laws which govern process calculi allow the process descriptions they provide to be reasoned about easily.
+All process calculi allow for the following operations:
+\begin{itemize}
+    \item Communication
+    \item Sequential Composition
+    \item Parallel Composition
+    \item Reduction Semantics
+    \item Hiding 
+    \item Recursion and Replication
+    \item The Null Process
+\end{itemize}
+\subsubsection{Communication}
+Processes are able to send messages between each other. Process calculi will generally have a pair of operators defining both input and output. Formally these are often $\bar{x}\langle y \rangle$ for a process sending out message $y$ on channel $x$, and $x \left( v \right) $ for a process receiving a message on channel $x$ and binding the variable $v$ to the value of that message in subsequent processes. 
+It is the type of data that can be sent/received by processes which sets apart different process calculi
+\subsubsection{Sequential Composition}
+Processes can potentially perform communications in order. This is signified by the sequential composition operator, often "$.$" . A process may need to wait for input on channel $x$ before continuing with other processes, which could be formally written $x\left( v \right) .P$
+\subsubsection{Parallel Composition}
+Processes can perform actions concurrently and independently. Process $P$ and $Q$ running in parallel, written $P|Q$ are able to communicate across any shared channels, however they are not limited to one channel only. These channels may be either synchronous, where the sending process must wait until the message is received, or asynchronous, where no such waiting is required.
+
+\subsubsection{Reduction Semantics}
+\subsubsection{Hiding}
+\subsubsection{Recursion and Replication}
+\subsubsection{The Null Process}
+The null process, generally represented as $0$ or $\emptyset$, does not interact with any other processes. It acts as the terminal process, and is the basis for processes which actually do things.
+
+
+\subsection{$\pi$-calculus and the Calculus of Communicating systems}
+
+The applied $\pi$-calculus \cite{af01} is an extension of $\pi$-calculus \cite{mpw92} which itself as an extension of the work Robert Milner did on the Calculus of Communicating Systems (CCS) \cite{m82}. All three languages are process modelling languages, that is to say that they are used to describe concurrent processes and interactions between them. 
+CCS is able to describe communications between two participants, and can 
+
 
 \subsection{Haskell}
 
@@ -21,7 +40,7 @@ The applied $\pi$-calculus \cite{af01} is an extension of $\pi$-calculus \cite{m
 \subsubsection{Parsec}
 
 Parsec is a monadic parser combinator library for Haskell which is fast, robust, simple and well-documented \cite{lm01}. We use parsec by building a series of low-level parsers and combining them into a single high level one.
-A basic parser that matches agains an 
+For example, a simple 
 
 
 \subsubsection{Concurrency}
