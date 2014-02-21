@@ -9,8 +9,10 @@ spellcheck:
 report.pdf: report.aux 
 	$(TEX) report.tex
 
-report.aux: introduction.tex background.tex plan.tex evaluation.tex bibliography.bib
+report.aux: introduction.tex background.tex plan.tex evaluation.tex bibliography.bib pi-calc.lhs
+
 
 clean: 
 	$(TEX) --clean report.tex
+	rm -rf pi-calc.tex
 

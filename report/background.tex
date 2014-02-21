@@ -88,6 +88,8 @@ Where conditional acts as expected and "new" restricts the name n in p.Processes
 
 The active substitution $\left[ \frac{M}{x} \right]$ represents the process that has output $M$ before and this value is now reference-able by the name $x$.
 
+\subsubsection{Simplified Syntax}
+
 As the Pict language did when creating an implementation of pure $\pi$-calculus we must first simplify the syntax of the language we are using \cite{pt97}. Function application will remain the same, and the set of variables and names shall in theory still be infinite. We will do away with the null process, and assume that a process without a sequential process is implicitly followed by the null process.
 
 
@@ -96,9 +98,9 @@ As the Pict language did when creating an implementation of pure $\pi$-calculus 
         $P|Q$& \verb!P | Q!& parallel composition\\
         $P.Q$& \verb!P ; Q!& sequential composition\\
         $!P$ & \verb?!P?& replication \\
-        $vn.P$& \verb!new x;P!& new \\
+        $vn$& \verb!new x!& new \\
         $if M=N then P else Q $&\verb!if p(M) then P else Q!& conditional \\
-        $u(x).P$&\verb!in(u,x);P!& input \\
+        $u(x)$&\verb!in(u,x)!& input \\
         $\bar{u}\langle N \rangle .P$&\verb!out(u,N)!& output \\
         $\left[ \frac{M}{x} \right]$&\verb!let X = M in P!&  active substitution (i.e. pattern matching) \\
     \end{tabular}
@@ -106,14 +108,34 @@ As the Pict language did when creating an implementation of pure $\pi$-calculus 
 
 This will be the syntax we refer to from now on, and which we will be attempting to compile.
 
+\subsubsection{Starting Restrictions}
+
+The first build of our compiler will only be able to handle a few basic types and functions
+
 \subsection{Haskell}
 
+Haskell is a pure non-strict functional programming language based on the $\lambda$-calculus. It is a strongly static typed language making it easy to ensure correctness of progams. It is highly expressive, but this combined with its laziness comes at a potential price in terms of execution time. We may well find that it simply is not possible to build a responsive enough system using Haskell, but there are several advantages to using it to build a compiler.
 
+\subsubsection{Abstract Data Type}
+Haskell makes it trivial to create abstract data types. As such we can easily use Haskell to build an abstract representation of our language, which we will later generate during the parsing process.
+    
+\input{pi-calc}
+
+We can test this as follows with the basic and complex inputs from our introduction (of course these currently hold no intrinsic meaning, but this will be implemented later)
+
+\begin{code}
+    ghci>(In "a" "x") `Seq` (Out "a" "x")
+    in(a,x);
+    out(a,x)
+
+    
+
+\end{code}
 
 \subsubsection{Parsec}
 
 Parsec is a monadic parser combinator library for Haskell which is fast, robust, simple and well-documented \cite{lm01}. We use parsec by building a series of low-level parsers and combining them into a single high level one.
-For example, a simple 
+For example, if we start with a low
 
 
 \subsubsection{Concurrency}

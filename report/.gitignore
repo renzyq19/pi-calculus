@@ -21,4 +21,7 @@
 *.mtc1
 *.out
 *.synctex.gz
+*.pdf
+pi-calc.tex
+*.ptb
 # source: https://gist.github.com/kogakure/149016
