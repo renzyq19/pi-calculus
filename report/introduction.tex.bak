@@ -2,7 +2,14 @@
 
 The applied pi-calculus is an expressive formal language describing computations as communicating processes. Its primary use in both industry and academia is to model security protocols. These models being built, they can then be statically analysed either by hand, or automatically by using a tool such as ProVerif. 
 
-For the purposes of static analysis, models built using applied pi-calculus have proven very useful. However, they are limited by the fact that they cannot currently be executed, as there is no existing language implementation. 
+For the purposes of static analysis, models built using applied pi-calculus have proven very useful.For example, it has been used to verify numerous security protocols, including but not limited to:
+\begin{enumerate}
+       Email certification
+       Privacy and verifiability in electronic voting
+       Authorisation protocols in trusted computing
+       Authentication protocols and key agreement
+\end{enumerate} \cite{rs13}
+However, they are limited by the fact that they cannot currently be executed, as there is no existing language implementation. 
 
 Without an implementation, any models built using the applied pi-calculus cannot be used to actually demonstrate protocols they are modelling, and those models can be very difficult to debug.
 
@@ -18,21 +25,23 @@ At the very least, we would like to be able to write something similar to:
 \end{verbatim}
 
 And have it execute successfully; receiving a message in on channel a, and sending the same message out again on channel b. However, ideally we would like to write something like the following:
-
+% TODO
 \begin{verbatim}
     out(net,httpRequest(uri,headers,httpGet()));
     in(net,(head : Header, message : String));
-    out(stdout, resp);
+    out(stdout, message);
     |
-    in(net,(u: URI, h: Header, req: httpReq));
+    in(net,(u: URI, h: Header, req: HttpReq));
     out(process,req);
-    in(process,resp);
+    in(process, resp : HttpResp);
     out(net,httpResponse(origin(h),resp));
 \end{verbatim}
 
-which would start one process which would send  out an HTTP GET request on the channel net, and await a response. Once that response has been received, it will destructure it and send the contents of the HTTP Response to stdout. Meanwhile, another process is set up to receive the same request on net, destructure it into its component parts, then handle the request, and send back an appropriate HTTP response. The latter may well be out of the our abilities, however the we would aim to create something capable of handling something a little more impressive than the former.
+which would start one process which would send out an HTTP GET request on the channel net, and await a response. Once that response has been received, it will de-structure it and send the contents of the HTTP Response to stdout. Meanwhile, another process is set up to receive the same request on net, de-structure it into its component parts, then handle the request, and send back an appropriate HTTP response. The latter may well be out of the our abilities, however the we would aim to create something capable of handling something a little more impressive than the former.
 
 \subsection{Approach}
 
-We will be aiming to build 
+We aim to build a compiler for the applied pi-calculus. The language we plan to do this in is Haskell, due to familiarity using both the language itself and the parsec library, a powerful parser combinator library. 
+
+We will also be building a little web playground for our initial efforts to interact with. This will give us a good idea of how our implementation will interact with real world servers, if at all. 
 

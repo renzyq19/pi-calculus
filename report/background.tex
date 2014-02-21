@@ -1,2 +1,27 @@
 \section{Background}
+\subsection{CCS, $\pi$-calculus and the applied $\pi$-calculus}
 
+The applied $\pi$-calculus \cite{af01} is an extension of $\pi$-calculus \cite{mpw92} which itself as an extension of the work Robert Milner did on the Calculus of Communicating Systems (CCS) \cite{m82}. Here we will give a brief introduction to all three, and show how each extends upon the next.
+\[
+\begin{array}[b]{l l}
+ P ::= & \emptyset \\
+  &a.P_{1}\\
+  &A\\
+  &P_{1} + P_{2} \\
+  &P_{1} | P_{2} \\
+  &P_{1} [\frac{b}{a}]\\
+  &P_{1} \backslash a 
+\end{array}
+\]
+
+\subsection{Haskell}
+
+
+
+\subsubsection{Parsec}
+
+Parsec is a monadic parser combinator library for Haskell which is fast, robust, simple and well-documented \cite{lm01}. We use parsec by building a series of low-level parsers and combining them into a single high level one.
+A basic parser that matches agains an 
+
+
+\subsubsection{Concurrency}

@@ -1,0 +1,3 @@
+\section{Evaluation}
+
+As mentioned before, there are already existing implementations of pure $\pi$-calculus like languages (Pict \cite{pt97} \cite{p96}, occam-$\pi$). At this stage it is difficult to tell whether

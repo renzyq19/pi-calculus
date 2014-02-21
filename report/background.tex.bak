@@ -1,0 +1,13 @@
+\section{Background}
+\subsection{CCS, $\pi$-calculus and the applied $\pi$-calculus}
+
+The applied $\pi$-calculus \cite{af01} is an extension of $\pi$-calculus \cite{mpw92} which itself as an extension of the work Robert Milner did on the Calculus of Communicating Systems (CCS) \cite{m82}. Here we will give a brief introduction to all three, and show how each extends upon the next.
+
+CCS can be characterised by the following BNF grammar:
+\[P ::= \emptyset \linebreak
+a.P_{1} \linebreak 
+A \linebreak 
+P_{1} + P_{2} \linebreak 
+( P_{1} | P_{2} ) \linebreak 
+P_{1} [\frac{b}{a}]\linebreak 
+P_{1} \backslash a \]
