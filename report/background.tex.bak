@@ -86,7 +86,9 @@ Where conditional acts as expected and "new" restricts the name n in p.Processes
     \end{tabular}
 \end{table} 
 
-The active substitution $\left[ \frac{M}{x} \right]$ represents the process that has output $M$ before and this value is now referenceable by the name $x$.
+The active substitution $\left[ \frac{M}{x} \right]$ represents the process that has output $M$ before and this value is now reference-able by the name $x$.
+
+\subsubsection{Simplified Syntax}
 
 As the Pict language did when creating an implementation of pure $\pi$-calculus we must first simplify the syntax of the language we are using \cite{pt97}. Function application will remain the same, and the set of variables and names shall in theory still be infinite. We will do away with the null process, and assume that a process without a sequential process is implicitly followed by the null process.
 
@@ -96,26 +98,149 @@ As the Pict language did when creating an implementation of pure $\pi$-calculus 
         $P|Q$& \verb!P | Q!& parallel composition\\
         $P.Q$& \verb!P ; Q!& sequential composition\\
         $!P$ & \verb?!P?& replication \\
-        $vn.P$& \verb!new x;P!& new \\
+        $vn$& \verb!new x!& new \\
         $if M=N then P else Q $&\verb!if p(M) then P else Q!& conditional \\
-        $u(x).P$&\verb!in(u,x);P!& input \\
+        $u(x)$&\verb!in(u,x)!& input \\
         $\bar{u}\langle N \rangle .P$&\verb!out(u,N)!& output \\
         $\left[ \frac{M}{x} \right]$&\verb!let X = M in P!&  active substitution (i.e. pattern matching) \\
     \end{tabular}
 \end{table} 
 
+This will be the syntax we refer to from now on, and which we will be attempting to compile.
 
+\subsubsection{Starting Restrictions}
 
-
+The first build of our compiler will only be able to handle a few basic types and functions
 
 \subsection{Haskell}
 
+Haskell is a pure non-strict functional programming language based on the $\lambda$-calculus. It is a strongly static typed language making it easy to ensure correctness of programs. It is highly expressive, but this combined with its laziness comes at a potential price in terms of execution time. We may well find that it simply is not possible to build a responsive enough system using Haskell, but there are several advantages to using it to build a compiler.
 
+\subsubsection{Abstract Data Type}
+Haskell makes it trivial to create abstract data types. As such we can easily use Haskell to build an abstract representation of our language, which we will later generate during the parsing process.
+    
+\input{pi-calc}
+
+We can test this as follows with the basic input from our introduction (of course these currently hold no intrinsic meaning, but this will be implemented later)
+
+\begin{code}
+    ghci>(In "a" "x") `Seq` (Out "a" (TVar "x"))
+    in(a,x);
+    out(a,x)
+\end{code}
+
+It is also good to note that malformed structures will fail:
+
+\begin{code}
+    ghci>(In "a" "x") `Seq` (Out "a" )
+
+    <interactive>:34:21:
+        Couldn't match expected type `PiProcess'
+        with actual type `Term -> PiProcess'
+        In the return type of a call of `Out'
+        Probable cause: `Out' is applied to too few arguments
+        In the second argument of `Seq', namely `(Out "a")'
+        In the expression: (In "a" "x") `Seq` (Out "a")
+                                        
+\end{code}
 
 \subsubsection{Parsec}
 
 Parsec is a monadic parser combinator library for Haskell which is fast, robust, simple and well-documented \cite{lm01}. We use parsec by building a series of low-level parsers and combining them into a single high level one.
-For example, a simple 
+For example, if we start with a low-level parser to match brackets, from that we can build a higher level parser which can then return the contents of those brackets as a list of strings:
+\begin{code}
+import Text.ParserCombinators.Parsec
 
+openB :: Parser Char
+openB = char '(' 
 
-\subsubsection{Concurrency}
+closeB :: Parser Char
+closeB = char ')' 
+
+betweenB :: Parser [String]
+betweenB = do{
+            openB;
+            [out] <- endBy line closeB;
+            return out;
+        } 
+    where
+        line = sepBy word (char ',')
+        word = many ( noneOf ",)")
+\end{code}
+
+We can test this parser using the parseTest function as follows:
+
+\begin{code}
+    ghci>parseTest betweenB "(sometext,somemoretext)"
+    ["sometext","somemoretext"]
+\end{code}
+
+This function also fails on malformed input
+
+\begin{code}
+    ghci>parseTest betweenB "(sometextsomemoretext"
+    parse error at (line 1, column 22):
+    unexpected end of input
+    expecting "," or ")"
+\end{code}
+
+From here, it is only a short step to build a parser for the basic \verb!in,out! syntax of the language. The following is a slightly untidy, but quickly built proof of concept parser to demonstrate the ease with which this can be achieved:
+
+\begin{code}
+
+inOut :: Parser PiProcess
+inOut = do {
+        piIn;
+        bContents <- betweenB;
+        case bContents of
+            [chan,message] -> return $ In chan message
+            _ -> error (e "in(chan,message)")
+        } <|> do {
+        piOut;
+        bContents <- betweenB;
+        case bContents of
+            [chan, message] -> return $ Out chan (TVar message)
+            _ -> error (e "out(chan,message)")
+        }
+        where
+            piIn= string "in"
+            piOut=string "out" 
+            e x= "malformed input " ++ x ++ " expected"
+            
+\end{code}
+
+And a demonstration of this in action (removing our custom show instance, as otherwise, because we chose to make it appear like the input, it seems like nothing is happening). Once more, malformed input throws errors depending on what exactly went wrong: 
+\begin{code}
+    ghci>parseTest inOut "in(a,b)"
+    In "a" "b"
+    ghci>parseTest inOut "out(a,b)"
+    Out "a" b
+    ghci>parseTest inOut "ot(a,b)"
+    parse error at (line 1, column 1):
+    unexpected "t"
+    expecting "out"
+    ghci>parseTest inOut "Out(a,b)"
+    parse error at (line 1, column 1):
+    unexpected "O"
+    expecting "in" or "out"
+    ghci>parseTest inOut "out( a,b)"
+    Out " a" b
+    ghci>parseTest inOut "out( a ,      b)"
+    Out " a "       b
+    ghci>parseTest inOut "out  a ,      b)"
+    parse error at (line 1, column 4):
+    unexpected " "
+    expecting "("
+    ghci>parseTest inOut "out(a,b,c)"
+    *** Exception: malformed input out(chan,message) expected
+    ghci>parseTest inOut "out (a,b)"
+    parse error at (line 1, column 4):
+    unexpected " "
+    expecting "("
+\end{code}
+
+In the last case it is interesting to note that whitespace is not handled very well. This can be solved by first tokenising the input. The ParsecToken module can be used to generate a tokeniser.
+
+\subsubsection{Semantics}
+
+Once we have parsed our input and built our syntax tree, we must then semantically analyse the input and generate the processes recquired. 

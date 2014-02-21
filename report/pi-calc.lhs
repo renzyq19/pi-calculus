@@ -2,6 +2,7 @@
 
 >module PiProcess where
 
+>import Data.List
 >data PiProcess = 
 
 Our abstract data type
@@ -50,8 +51,11 @@ Plain name
 
 Plain variable (we keep the distinction for now to be in keeping with \cite{af01} and \cite{rs13})
 
->            TFun  Name Term Int   
->               deriving (Eq,Show)
+>            TFun  Name [Term] Int   
+
+Functions over a list of terms, holding information about their arity 
+
+>               deriving (Eq)
 
 To begin with, for the purposes of getting a basic parser up and running, we will simply have Variabls and Names be type synonyms for String. 
 
@@ -62,7 +66,7 @@ This will change in future, as both will eventually need to contain some type in
 
 Condition currently only holds information about two terms being equal
 
->data Condition = Term `Equals` Term deriving (Show)
+>data Condition = Term `Equals` Term deriving (Eq, Show)
 
 This may change 
 
@@ -77,4 +81,10 @@ We can then define how our data type is to be printed, here we choose to make it
 >    show (New n)   = "new " ++ n
 >    show (If c p1 p2) = "if " ++ show c ++ " then " ++ show p1 ++ " else " ++ show p2
 >    show (Let n t p2) = "let " ++ n ++ " = " ++ show t ++ " in\n" ++ show p2 
+
+>instance Show Term where
+>   show (TVar x) = x
+>   show (TName n)= n
+>   show (TFun n [] 0) = n
+>   show (TFun n ts _) = n ++ "(" ++ (concat (intersperse "," (map show ts))) ++ ")"
 
