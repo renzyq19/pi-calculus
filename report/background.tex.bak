@@ -110,7 +110,8 @@ This will be the syntax we refer to from now on, and which we will be attempting
 
 \subsubsection{Starting Restrictions}
 
-The first build of our compiler will only be able to handle a few basic types and functions
+The first build of our compiler will only be able to handle a few basic types and functions. We will also only be concerning ourselves with HTTP traffic, and to begin with our channels will be WebSockets \cite{wiki:ws}. The reasoning here is that attempting a completely generic channel would involve implementing a huge range of different server and client-like processes, which is not feasible. By starting with WebSockets, we can familiarise ourselves with some of the concepts of
+channels and cross-process communication, and later on we can expand to more generic sockets once we are sure our language implementation is sound.
 
 \subsection{Haskell}
 
@@ -241,6 +242,25 @@ And a demonstration of this in action (removing our custom show instance, as oth
 
 In the last case it is interesting to note that whitespace is not handled very well. This can be solved by first tokenising the input. The ParsecToken module can be used to generate a tokeniser.
 
-\subsubsection{Semantics}
+\subsubsection{WebSockets}
 
-Once we have parsed our input and built our syntax tree, we must then semantically analyse the input and generate the processes recquired. 
+Once we have parsed our input and built our syntax tree, we must then semantically analyse the input and generate the processes required. As mentioned before we will be using WebSockets for our initial implementation.
+
+Here we can demonstrate some basic WebSockets functionality. We can use the Haskell WebSockets module in the following way:
+
+\input{sockets.lhs}
+
+This small program creates two processes. The client continuously reads from stdin and then sends the information over the socket, and the server recieves the data from the socket and sends it back. In other words, written in our version of the applied $\pi$-calculus it does:
+\begin{verbatim}
+    !(in(stdin,x);
+    out(socket(0.0.0.0,9000),x);
+    in(socket(0.0.0.0,9000),y);
+    out(stdout,y)) 
+    |
+    !(in(socket(0.0.0.0,9000),x);
+    out(socket(0.0.0.0,9000),x))
+\end{verbatim}
+
+Which is something akin to our basic program from our introduction.
+
+
