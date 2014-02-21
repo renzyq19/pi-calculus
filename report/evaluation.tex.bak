@@ -1,5 +1,11 @@
 \section{Evaluation}
 
-
-
-There already exist languages built upon $\pi$-calculus (Pict \cite{pt97} \cite{p96}, occam-$\pi$, BPML). At this stage it is difficult to tell whether
+There are 6 levels of success we would like to achieve over the course of this project. In increasing order of difficulty they are:
+\begin{enumerate}
+    \item Basic interaction with controlled environment
+    \item Moderate coverage of language by compiler (in, out, parallel composition, sequential composition, limited replication) 
+    \item Models for a few more basic protocols, such as a naive handshake protocol
+    \item Responsive concurrency and fast compilation
+    \item Complete language compilation (pattern matching, destructuring, user defined functions and types)
+    \item Fully interoperable compiled models
+\end{enumerate}

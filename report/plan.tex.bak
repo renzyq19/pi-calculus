@@ -11,7 +11,7 @@ Basic interaction with small servers i.e. \verb!in(a,message);out(a,message)!
 \subsubsection{21$^{st}$ March}
 We would like to be able to compile a subset of the language, definitely \verb?in, out, !, |, if then else? and be able to test some basic interactions. If this is not possible at this stage, we may have to rethink the restrictions we have set for the language. Continue to write up implementation details for whatever we have achieved so far. 
 \subsubsection{4$^{th}$ April}  
-Ideally we should be able to model and execute a basic handshake protocol by this stage, this will have required the addition of \verb!new! and \verb!let! to our compile-able subset, and also a few functions. Continue to add any further implementation details.
+Ideally we should be able to model and execute a basic handshake protocol by this stage, this will have required the addition of \verb!new! and \verb!let! to our compileable subset, and also a few functions. Continue to add any further implementation details.
 \subsubsection{18$^{th}$ April}
 If all goals met so far, begin trying to speed up compilation times and responsiveness of compiled programs. If not then work out what is causing difficulties, maybe rethink strategy/implementation. Write up anything relevant on either changing the implementation or increasing responsiveness.
 \subsubsection{2$^{nd}$ May}    
