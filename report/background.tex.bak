@@ -1,8 +1,8 @@
 \section{Background}
 \subsection{Process Calculi}
 
-Process calculi, sometimes referred to as process algebras are a family of languages and models for describing concurrent systems. They allow for the description of communication and synchronization between two or more concurrent processes. The algebraic laws which govern process calculi allow the process descriptions they provide to be reasoned about easily.
-All process calculi allow for the following operations:
+Process calculi , sometimes referred to as process algebras are a family of languages and models for describing concurrent systems. They allow for the description of communication and synchronization between two or more concurrent processes. The algebraic laws which govern process calculi allow the process descriptions they provide to be reasoned about easily.
+All process calculi allow for the following operations \cite{wiki:pa}:
 \begin{itemize}
     \item Communication
     \item Sequential Composition
@@ -24,9 +24,9 @@ Processes can perform actions concurrently and independently. Process $P$ and $Q
 The details of reduction semantics are different for each process calculus, but the theory is the same. The process $\bar{x}\langle y \rangle . P | x \left( v \right) . Q $ reduces to the process $P|Q\left[ \frac{y}{v} \right]$, which is to say the following: the left hand process sends out message $y$ on channel $x$ and becomes the process $P$, and the right hand process receives a message ( $y$ ) on channel $x$, binding that message to the variable $v$ for the remaining processes
 in $Q$.
 \subsubsection{Hiding}
-The ability to hide a name in a process is vital for the control of communications made in parallel. Hiding the name $x$ in $P$ could be written $P \backslash \left{ x \right}$.
+The ability to hide a name in a process is vital for the control of communications made in parallel. Hiding the name $x$ in $P$ could be written $P \backslash \left[ x \right]$.
 \subsubsection{Recursion and Replication}
-Recursion and replication allow for a process to continue indefinitely. Recursion of a process is a sequential concept and would be written $P = P.P$. Replication is the concurrent equvalent i.e. $!P = P | !P$
+Recursion and replication allow for a process to continue indefinitely. Recursion of a process is a sequential concept and would be written $P = P.P$. Replication is the concurrent equivalent i.e. $!P = P | !P$
 \subsubsection{The Null Process}
 Finally, the null process, generally represented as $0$ or $\emptyset$, does not interact with any other processes. It acts as the terminal process, and is the basis for processes which actually do things.
 
@@ -34,7 +34,78 @@ Finally, the null process, generally represented as $0$ or $\emptyset$, does not
 \subsection{$\pi$-calculus and the Calculus of Communicating systems}
 
 The applied $\pi$-calculus \cite{af01} is an extension of $\pi$-calculus \cite{mpw92} which itself as an extension of the work Robert Milner did on the Calculus of Communicating Systems (CCS) \cite{m82}. All three languages are process modelling languages, that is to say that they are used to describe concurrent processes and interactions between them. 
-CCS is able to describe communications between two participants, and can 
+CCS is able to describe communications between two participants, and has all of the basic process algebra components as above. 
+$\pi$-calculus provides an important extension allowing channel names to be passed along channels. This allows it to model concurrent processes whose configurations are not constant.
+
+\subsection{Compilation}
+
+Trying to compile a process based language presents several difficulties from the offset. Such a compiler needs to be able to generate processes, switch contexts, and perform cross-channel communication very quickly as these operations, which are normally considered computationally intensive, form the basis of any process calculus. \cite{pt97} 
+As such, it may be necessary either to reduce the feature set of the language in order to ensure that the compiler performs acceptably. 
+
+\subsection{The applied $\pi$-calculus}
+
+As mentioned before, the applied $\pi$-calculus is based on $\pi$-calculus, but it is designed specifically to model security protocols \cite{rs13}. It is extended to include a large set of complex primitives and functions.
+\subsubsection{Syntax}
+
+The language assumes an infinite set of names and variables and a signature $\sigma$ which is the finite set of functions and their corresponding arities\cite{af01}. A function with arity 0 is considered a constant. Given these, the set of terms is described by the following grammar:
+\begin{table}[hc!]
+    \begin{tabular}{r l}
+        $L,M,N,T,U,V ::=$ & terms \\
+        $a,b,c,...,s$ & names\\
+        $x,y,z$ & variables\\
+        $g(M_{1},M_{2},...M_{l})$ & function application \\
+    \end{tabular}
+\end{table}
+
+The type system (or sort system) comprises a set of base types such as \emph{Integer} and \emph{Key}, but also a universal \emph{Data}type. Names and variables can have any type. 
+Processes have the following grammar:
+
+\begin{table}[hc!]
+    \begin{tabular}{r l}
+         $P,Q,R ::=$ & processes  \\
+         $\emptyset$& null process\\
+        $P|Q$& parallel composition\\
+        $P.Q$& sequential composition\\
+        $!P$& replication \\
+        $vn.P$& new \\
+        $if M=N then P else Q $& conditional \\
+        $u(x).P$& input \\
+        $\bar{u}\langle N \rangle .P$& output \\
+    \end{tabular}
+\end{table} 
+Where conditional acts as expected and "new" restricts the name n in p.Processes are extended as follows with active substitutions.
+
+\begin{table}[hc!]
+    \begin{tabular}{r l}
+         $A,B,C ::=$ & extended processes  \\
+        $P$& plain process\\
+        $A|B$& process composition \\
+        $vn.A$& new name \\
+        $vx.A$& new variable \\
+        $\left[ \frac{M}{x} \right]$&  active substitution \\
+    \end{tabular}
+\end{table} 
+
+The active substitution $\left[ \frac{M}{x} \right]$ represents the process that has output $M$ before and this value is now referenceable by the name $x$.
+
+As the Pict language did when creating an implementation of pure $\pi$-calculus we must first simplify the syntax of the language we are using \cite{pt97}. Function application will remain the same, and the set of variables and names shall in theory still be infinite. We will do away with the null process, and assume that a process without a sequential process is implicitly followed by the null process.
+
+
+\begin{table}[hc!]
+    \begin{tabular}{r c l}
+        $P|Q$& \verb!P | Q!& parallel composition\\
+        $P.Q$& \verb!P ; Q!& sequential composition\\
+        $!P$ & \verb?!P?& replication \\
+        $vn.P$& \verb!new x;P!& new \\
+        $if M=N then P else Q $&\verb!if p(M) then P else Q!& conditional \\
+        $u(x).P$&\verb!in(u,x);P!& input \\
+        $\bar{u}\langle N \rangle .P$&\verb!out(u,N)!& output \\
+        $\left[ \frac{M}{x} \right]$&\verb!let X = M in P!&  active substitution (i.e. pattern matching) \\
+    \end{tabular}
+\end{table} 
+
+
+
 
 
 \subsection{Haskell}
