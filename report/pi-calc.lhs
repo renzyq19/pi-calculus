@@ -1,8 +1,8 @@
 %include polycode.fmt
 
+>import Data.List
 >module PiProcess where
 
->import Data.List
 >data PiProcess = 
 
 Our abstract data type

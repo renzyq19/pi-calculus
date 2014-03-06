@@ -1,7 +1,7 @@
 pi-calculus
 ===========
 
-*3rd year final project : Implementation of a New Web Language*
+*Implementation of a New Web Language*
 
 The applied pi-calculus is a small, formal, and very expressive language to describe computations based on processes sending messages to each other. It is used in industry and in academia in particular to describe realistic security protocols, whose security can then be analyzed with static analysis tools.
 
