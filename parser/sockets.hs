@@ -1,13 +1,9 @@
-%import polycode.ftm
-
-\begin{code}
 import Control.Monad (forever,unless)
 import Control.Concurrent (forkIO)
 import Control.Monad.IO.Class (liftIO)
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import qualified Network.WebSockets as WS
-
 
 -- SERVER Process Code
 server :: IO ()
@@ -40,7 +36,3 @@ main :: IO ()
 main = do
     _ <- forkIO $ server
     client
-    
-
-
-\end{code}
