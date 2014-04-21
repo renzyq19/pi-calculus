@@ -4,36 +4,29 @@ import PiProcess
 import Text.ParserCombinators.Parsec
 
 
-openB :: Parser Char
-openB = char '(' 
+parseIn :: Parser PiProcess
+parseIn = do
+           string "in("
+           name <- readName
+           char ','
+           var  <- readVar
+           char ')'
+           return $ In name var 
 
-closeB :: Parser Char
-closeB = char ')' 
+parseOut :: Parser PiProcess
+parseOut = do
+           string "out("
+           name <- readName
+           char ','
+           term  <- readTerm
+           char ')'
+           return $ Out name term 
 
-betweenB :: Parser [String]
-betweenB = do
-            openB
-            [out] <- endBy line closeB
-            return out
-    where
-        line = sepBy word (char ',')
-        word = many $ noneOf ",)"
+parseProcess :: Parser PiProcess
+parseProcess = undefined
+parseReplicate :: Parser PiProcess
+parseReplicate = do
+            string "!("
+            process <- 
 
-inOut :: Parser PiProcess
-inOut = (do 
-        piIn
-        bContents <- betweenB
-        case bContents of
-            [chan,message] -> return $ In chan message
-            _ -> error (e "in(chan,message)"))
-            <|> 
-         (do 
-                piOut
-                bContents <- betweenB
-                case bContents of
-                    [chan, message] -> return $ Out chan (TVar message)
-                    _ -> error (e "out(chan,message)"))
-        where
-            piIn = string "in"
-            piOut= string "out" 
-            e x= "malformed input " ++ x ++ " expected"
+
