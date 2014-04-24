@@ -195,7 +195,7 @@ primitives = [ ("true"      , constId "true")
              , ("adec"      , adec)
              , ("aenc"      , binaryId "aenc")
              , ("sign"      , binaryId "sign")
-             , ("checksign" , binaryId "checksign")
+             , ("checksign" , checksign)
              , ("mac"       , binaryId "mac")
              ]
 
@@ -238,7 +238,7 @@ adec e@_ = error $ "checksign expected (x,aenc(pk(x),y)), got: " ++ show e
 checksign :: TermFun
 checksign [TFun "pk" [k1] 1, TFun "sign" [k2,_] 2 ]
     | k1 == k2 = constId "true" [] 
-    | otherwise= error $ "keys not same in checksign" 
+    | otherwise= constId "false" []
 checksign e@_ = error $ "checksign expected (pk(x),sign(x,y)), got: " ++ show e
 
 main :: IO ()
