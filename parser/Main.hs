@@ -2,6 +2,7 @@ module Main where
 
 import Control.Monad (liftM)
 import Data.List (intercalate)
+import Data.Maybe (fromJust)
 import System.Environment (getArgs)
 import Text.ParserCombinators.Parsec
 
@@ -25,6 +26,7 @@ type Name      = String
 data Condition = Term `Equals` Term deriving (Eq, Show)
 
 showPi :: PiProcess -> String
+showPi Null = "0"
 showPi (In c m) =  "in(" ++ c ++ "," ++ m ++ ")"
 showPi (Out c m) =  "out(" ++ c ++ "," ++  show m ++ ")"
 showPi (Replicate proc) =  "!(" ++ show proc ++ ")"
@@ -145,9 +147,9 @@ parseTFun = do
 
 readVar :: Parser Name
 readVar = do
-            first <- letter
+            frst <- letter
             rest <- many $ letter <|> digit
-            return $ first:rest
+            return $ frst:rest
 
 paddedComma :: Parser ()
 paddedComma = paddedChar ','
@@ -178,6 +180,61 @@ bracketed parser = do
                     char ')'
                     return res
 
+type TermFun = [Term] -> Term
+primitives :: [(String      , TermFun)]
+primitives = [ ("true"      , constId "true")
+             , ("false"     , constId "false")
+             , ("fst"       , first)
+             , ("snd"       , second)
+             , ("hash"      , unary)
+             , ("pk"        , unary)
+             , ("getmsg"    , unary)
+             , ("pair"      , binaryId "pair")
+             , ("sdec"      , binary)
+             , ("senc"      , binary)
+             , ("adec"      , binary)
+             , ("aenc"      , binary)
+             , ("sign"      , binary)
+             , ("checksign" , binary)
+             , ("mac"       , binary)
+             ]
+
+constId :: String -> TermFun
+constId name [] = TFun name [] 0
+constId name _  = error $ "incorrect parity for " ++ name
+
+unaryId :: String -> TermFun
+unaryId name [x] = TFun name [x] 1
+unaryId name _  = error $ "incorrect parity for " ++ name
+
+binaryId :: String ->  TermFun
+binaryId name [x,y] = TFun name [x,y] 2
+binaryId name _     = error $ "incorrect parity for " ++ name
+
+true :: TermFun
+true _ = TFun "true" [] 0
+
+false :: TermFun
+false _ = TFun "false" [] 0
+
+first :: TermFun
+first [TFun "pair" [x, _] 2] = x
+first _  = error "fst not given pair"
+
+second :: TermFun
+second [TFun "pair" [_,y] 2] = y
+second _ = error "second not given pair"
+
+constant :: TermFun
+constant = undefined
+
+unary :: TermFun
+unary = undefined
+
+binary :: TermFun
+binary  = undefined
+
+
 main :: IO ()
 main = do
         args <- getArgs 
@@ -193,3 +250,19 @@ readProgram input = case parse parseProcess "pi-calculus" input of
                         Left  err -> show err
                         Right val -> show val 
 
+evalTerm :: Term -> Term
+evalTerm val@(TVar _) = val
+evalTerm (TFun name args _) = fun $ map evalTerm args
+        where 
+            fun = fromJust $ lookup name primitives
+
+eval :: PiProcess -> IO ()
+eval Null = undefined
+eval (In c m) = undefined
+eval (Out c m) = undefined
+eval (Replicate proc)= undefined
+eval (p1 `Conc` p2) = undefined
+eval (p1 `Seq` p2) = undefined 
+eval (New n)   = undefined 
+eval (If c p1 p2) = undefined 
+eval (Let n t p) = undefined 
