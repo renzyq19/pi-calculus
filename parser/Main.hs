@@ -186,17 +186,17 @@ primitives = [ ("true"      , constId "true")
              , ("false"     , constId "false")
              , ("fst"       , first)
              , ("snd"       , second)
-             , ("hash"      , unary)
-             , ("pk"        , unary)
-             , ("getmsg"    , unary)
+             , ("hash"      , unaryId "hash")
+             , ("pk"        , unaryId "pk")
+             , ("getmsg"    , getmsg)
              , ("pair"      , binaryId "pair")
-             , ("sdec"      , binary)
-             , ("senc"      , binary)
-             , ("adec"      , binary)
-             , ("aenc"      , binary)
-             , ("sign"      , binary)
-             , ("checksign" , binary)
-             , ("mac"       , binary)
+             , ("sdec"      , sdec)
+             , ("senc"      , binaryId "senc")
+             , ("adec"      , adec)
+             , ("aenc"      , binaryId "aenc")
+             , ("sign"      , binaryId "sign")
+             , ("checksign" , binaryId "checksign")
+             , ("mac"       , binaryId "mac")
              ]
 
 constId :: String -> TermFun
@@ -211,11 +211,9 @@ binaryId :: String ->  TermFun
 binaryId name [x,y] = TFun name [x,y] 2
 binaryId name _     = error $ "incorrect parity for " ++ name
 
-true :: TermFun
-true _ = TFun "true" [] 0
-
-false :: TermFun
-false _ = TFun "false" [] 0
+getmsg :: TermFun
+getmsg [TFun "sign" [_,y] 2] = y
+getmsg l@_ = error $  "getmsg expected sign(x,y) got: " ++ show l
 
 first :: TermFun
 first [TFun "pair" [x, _] 2] = x
@@ -225,15 +223,23 @@ second :: TermFun
 second [TFun "pair" [_,y] 2] = y
 second _ = error "second not given pair"
 
-constant :: TermFun
-constant = undefined
+sdec :: TermFun
+sdec [k1, TFun "senc" [k2,y] 2]
+    |k1 == k2  = y
+    |otherwise = error "keys not the same in sdec"
+sdec _ = error "sdec not given pair"
 
-unary :: TermFun
-unary = undefined
+adec :: TermFun
+adec [x , TFun "aenc" [TFun "pk" [k] 1, y ] 2 ]
+    | x == k = y
+    | otherwise= error $ "keys not same in adec" 
+adec e@_ = error $ "checksign expected (x,aenc(pk(x),y)), got: " ++ show e
 
-binary :: TermFun
-binary  = undefined
-
+checksign :: TermFun
+checksign [TFun "pk" [k1] 1, TFun "sign" [k2,_] 2 ]
+    | k1 == k2 = constId "true" [] 
+    | otherwise= error $ "keys not same in checksign" 
+checksign e@_ = error $ "checksign expected (pk(x),sign(x,y)), got: " ++ show e
 
 main :: IO ()
 main = do
