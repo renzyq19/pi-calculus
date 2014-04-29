@@ -2,7 +2,8 @@ module Main where
 
 import Control.Monad (liftM, liftM2)
 import Control.Monad.Error (Error(..), ErrorT(..), MonadError,throwError )
-import Data.IORef (IORef, newIORef, readIORef)
+import Control.Monad.Trans (liftIO)
+import Data.IORef (IORef, newIORef, readIORef,writeIORef)
 import Data.List (intercalate)
 import Data.Maybe (isJust)
 import System.Environment (getArgs)
@@ -25,7 +26,7 @@ data Term = TVar Variable Type
 
 data Value = Process PiProcess 
            | Term Term
-             deriving (Eq)
+           | Function TermFun
 
 data PiError = NumArgs Name Integer [Term]
              | TypeMismatch String Value
@@ -53,6 +54,13 @@ isBound envRef var = liftM (isJust . lookup var) $ readIORef envRef
 
 getVar :: Env -> String -> IOThrowsError Value 
 getVar = undefined
+
+setVar :: Env -> String -> Value -> IOThrowsError Value
+setVar envRef var val = do env <- liftIO $ readIORef envRef
+                           maybe (throwError $ UnboundVar "Setting an unbound variable" var)
+                                 (liftIO . flip writeIORef val)
+                                 (lookup var env)
+                           return val
 
 showValue :: Value -> String
 showValue (Process p) = show p
@@ -281,7 +289,7 @@ second [TFun "pair" [_,y] 2 _] = return y
 second _ = error "second not given pair"
 
 http :: TermFun
-http [TVar ip _] = undefined
+http [TVar _ _] = undefined
 
 sdec :: TermFun
 sdec [k1, TFun "senc" [k2,y] 2 _]
@@ -324,25 +332,23 @@ evalTerm _ val@(TVar _ _) = return val
 evalTerm env (TFun name args _ _) = do
             fun <- getVar env name
             argVals <- mapM (evalTerm env) args
-            case fun of
-                Term f@(TFun{}) -> apply f argVals
-                Term _          -> throwError $ NotFunction  "" $ show fun 
-                Process _       -> throwError $ NotFunction  "" $ show fun
+            apply fun argVals
 
-apply :: Term -> [Term] -> IOThrowsError Term 
-apply = undefined
+apply :: Value -> [Term] -> IOThrowsError Term 
+apply (Function fun) args = liftThrows $ fun args
+apply e args            = throwError $ NotFunction  ("Found " ++ show e) $ show args
 
 liftThrows :: ThrowsError a -> IOThrowsError a
 liftThrows (Left err)  = throwError err
 liftThrows (Right val) = return val
 
 eval :: Env -> PiProcess -> IO ()
-eval _ Null = putStrLn "Stopping Process..."
-eval _ (In c m) = undefined
-eval _ (Out c m) = undefined
-eval env (Replicate proc)= eval env $ proc `Conc` Replicate proc
-eval _ (p1 `Conc` p2) = undefined
-eval _ (p1 `Seq` p2) = undefined 
-eval _ (New n)   = undefined 
-eval env (If c p1 p2) = undefined 
-eval _ (Let n t p) = undefined 
+eval _ Null               = putStrLn "Stopping Process..."
+eval _ (In _ _)           = undefined
+eval _ (Out _ _)          = undefined
+eval env (Replicate proc) = eval env $ proc `Conc` Replicate proc
+eval _ (_ `Conc` _)       = undefined
+eval _ (_ `Seq` _)        = undefined 
+eval _ (New _)            = undefined 
+eval _ (If{})             = undefined 
+eval _ (Let{})            = undefined
