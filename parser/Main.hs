@@ -3,7 +3,7 @@ module Main where
 
 import Control.Arrow (second)
 import Control.Monad (liftM, liftM2)
-import Control.Monad.Error (Error(..), ErrorT(..), MonadError,throwError )
+import Control.Monad.Error (Error(..), ErrorT(..), MonadError, catchError, throwError )
 import Control.Monad.Trans (liftIO)
 import Data.IORef (IORef, newIORef, readIORef,writeIORef)
 import Data.List (intercalate)
@@ -368,6 +368,15 @@ liftThrows :: ThrowsError a -> IOThrowsError a
 liftThrows (Left err)  = throwError err
 liftThrows (Right val) = return val
 
+runIOThrows :: IOThrowsError String -> IO String
+runIOThrows action = liftM extractValue $ runErrorT (trapError action)
+
+trapError :: (Show e, MonadError e m) => m String -> m String
+trapError action = catchError action (return . show)
+
+extractValue :: ThrowsError a -> a
+extractValue (Right v) = v
+
 eval :: Env -> PiProcess -> IO ()
 eval _ Null               = putStrLn "Stopping Process..."
 eval _ (In _ _)           = undefined
@@ -378,3 +387,18 @@ eval _ (_ `Seq` _)        = undefined
 eval _ (New _)            = undefined 
 eval _ (If{})             = undefined 
 eval _ (Let{})            = undefined
+
+evalString :: Env -> String -> IO String
+evalString env expr = runIOThrows $ liftM show $ liftThrows (readTerm expr) >>= evalTerm env
+
+
+readTerm :: String -> ThrowsError Term 
+readTerm str = case parse parseTerm "(test)" str of
+                Left  err -> throwError $ Parser err
+                Right val -> return val 
+
+evalAndPrint :: Env -> String -> IO ()
+evalAndPrint env expr = evalString env expr >>= putStrLn
+
+runTerm :: String -> IO ()
+runTerm expr = primitiveBindings >>= flip evalAndPrint expr
