@@ -306,7 +306,7 @@ main = do
         args <- getArgs 
         let f = case args of
                     []  -> readFile "test.pi" 
-                    [x] -> readFile x
+                    [x] -> return x
         progs <- liftM lines f
         putStrLn $ intercalate  "\n\n" $ map readProgram progs
         putStrLn ""
