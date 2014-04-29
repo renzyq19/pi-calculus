@@ -17,7 +17,7 @@ data PiProcess = Null
                | Replicate PiProcess         -- Infinite parallel replication
                | Let Term Term PiProcess
                | If Condition PiProcess PiProcess
-                 deriving (Eq,Show)
+                 deriving (Eq)
 
 data Term = TVar Variable Type
           | TFun Name [Term] Int Type
@@ -88,7 +88,7 @@ showError (TypeMismatch expected found) = "Invalid type: expected " ++ expected 
 showError (Parser parseErr)             = "Parse error at " ++ show parseErr
 
 
--- instance Show PiProcess where show = showPi
+instance Show PiProcess where show = showPi
 instance Show Term where show = showTerm
 instance Show Condition where show = showCond
 instance Show Value where show = showValue
@@ -320,14 +320,14 @@ evalCond :: Env -> Condition -> IOThrowsError Bool
 evalCond env (t1 `Equals` t2) = liftM2 (==) (evalTerm env t1) (evalTerm env t2)
 
 evalTerm :: Env -> Term -> IOThrowsError Term
-evalTerm env val@(TVar _ _) = return val
+evalTerm _ val@(TVar _ _) = return val
 evalTerm env (TFun name args _ _) = do
             fun <- getVar env name
             argVals <- mapM (evalTerm env) args
             case fun of
                 Term f@(TFun{}) -> apply f argVals
-                Term _                -> throwError $ NotFunction  "" $ show fun 
-                Process _             -> throwError $ NotFunction  "" $ show fun
+                Term _          -> throwError $ NotFunction  "" $ show fun 
+                Process _       -> throwError $ NotFunction  "" $ show fun
 
 apply :: Term -> [Term] -> IOThrowsError Term 
 apply = undefined
