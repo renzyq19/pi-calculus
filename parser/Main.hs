@@ -1,5 +1,7 @@
+{-# LANGUAGE TupleSections #-}
 module Main where
 
+import Control.Arrow (second)
 import Control.Monad (liftM, liftM2)
 import Control.Monad.Error (Error(..), ErrorT(..), MonadError,throwError )
 import Control.Monad.Trans (liftIO)
@@ -45,7 +47,6 @@ data Condition = Term `Equals` Term deriving (Eq)
 
 type Env = IORef [(String , IORef Value)]
 
-
 nullEnv :: IO Env
 nullEnv = newIORef []
 
@@ -53,7 +54,10 @@ isBound :: Env -> String -> IO Bool
 isBound envRef var = liftM (isJust . lookup var) $ readIORef envRef
 
 getVar :: Env -> String -> IOThrowsError Value 
-getVar = undefined
+getVar envRef var = do env <- liftIO $ readIORef envRef
+                       maybe (throwError $ UnboundVar "Getting an unbound variable" var)
+                             (liftIO . readIORef)
+                             (lookup var env)
 
 setVar :: Env -> String -> Value -> IOThrowsError Value
 setVar envRef var val = do env <- liftIO $ readIORef envRef
@@ -62,9 +66,21 @@ setVar envRef var val = do env <- liftIO $ readIORef envRef
                                  (lookup var env)
                            return val
 
+defineVar :: Env -> String -> Value -> IOThrowsError Value
+defineVar envRef var val = do
+    alreadyDefined <- liftIO $ isBound envRef var
+    if alreadyDefined
+        then setVar envRef var val >> return val
+        else liftIO $ do
+            valueRef <- newIORef val
+            env      <- readIORef envRef
+            writeIORef envRef ((var,valueRef):env)
+            return val
+
 showValue :: Value -> String
-showValue (Process p) = show p
-showValue (Term t)    = show t
+showValue (Process p)  = show p
+showValue (Term t)     = show t
+showValue (Function _) = "Function" 
 
 showPi :: PiProcess -> String
 showPi Null = "0"
@@ -245,11 +261,21 @@ bracketed parser = do
 
 type TermFun = [Term] -> ThrowsError Term
 
+
+bindVars :: Env -> [(String , Value)] -> IO Env
+bindVars envRef bindings = readIORef envRef >>= extendEnv bindings >>= newIORef
+    where
+        extendEnv bs env     = liftM (++ env) (mapM addBinding bs)
+        addBinding (var,val) = liftM (var,) $ newIORef val
+
+primitiveBindings :: IO Env
+primitiveBindings = nullEnv >>= flip bindVars (map  (second Function) primitives)
+
 primitives :: [(String      , TermFun)]
 primitives = [ ("true"      , constId "true")
              , ("false"     , constId "false")
              , ("fst"       , first)
-             , ("snd"       , second)
+             , ("snd"       , secnd)
              , ("hash"      , unaryId "hash")
              , ("pk"        , unaryId "pk")
              , ("http"      , http)
@@ -284,9 +310,9 @@ first :: TermFun
 first [TFun "pair" [x, _] 2 _] = return x
 first _  = error "fst not given pair"
 
-second :: TermFun
-second [TFun "pair" [_,y] 2 _] = return y
-second _ = error "second not given pair"
+secnd :: TermFun
+secnd [TFun "pair" [_,y] 2 _] = return y
+secnd _ = error "second not given pair"
 
 http :: TermFun
 http [TVar _ _] = undefined
