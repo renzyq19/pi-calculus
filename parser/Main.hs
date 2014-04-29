@@ -27,7 +27,7 @@ data Value = Process PiProcess
            | Term Term
              deriving (Eq)
 
-data PiError = NumArgs Integer [Term]
+data PiError = NumArgs Name Integer [Term]
              | TypeMismatch String Value
              | Parser ParseError
              | NotFunction String String
@@ -78,18 +78,32 @@ showTerm (TFun n ts _ _) = n ++ "(" ++ intercalate "," (map show ts) ++ ")"
 showCond :: Condition -> String
 showCond (t1 `Equals` t2) = show t1 ++ " == " ++ show t2
 
+showError :: PiError -> String
+showError (UnboundVar message var)      = message ++ ": " ++ var
+showError (NotFunction message fun)     = message ++ ": " ++ fun
+showError (NumArgs name expected found) = "Expected " ++ show name ++ show expected ++ " args; found values "
+                                          ++ unwordsList found
+showError (TypeMismatch expected found) = "Invalid type: expected " ++ expected ++ ", found "
+                                          ++ show found
+showError (Parser parseErr)             = "Parse error at " ++ show parseErr
+
+
 -- instance Show PiProcess where show = showPi
 instance Show Term where show = showTerm
 instance Show Condition where show = showCond
 instance Show Value where show = showValue
+instance Show PiError where show = showError
 
 instance Error PiError where
     noMsg = Default "an error has occured" 
     strMsg= Default
 
+unwordsList :: [Term] -> String
+unwordsList = unwords . map show
+
 parseNull :: Parser PiProcess
 parseNull = do
-            char '0'
+            paddedChar '0'
             return Null
 
 parseIn :: Parser PiProcess
@@ -118,7 +132,7 @@ parseReplicate = do
             return $ Replicate process
 
 paddedChar :: Char ->  Parser ()
-paddedChar ch= do
+paddedChar ch = do
             spaces
             char ch
             spaces
@@ -190,7 +204,7 @@ readVar = do
             return $ frst:rest
 
 symbol :: Parser Char
-symbol = oneOf "."
+symbol = oneOf ".'"
 
 paddedComma :: Parser ()
 paddedComma = paddedChar ','
@@ -205,12 +219,12 @@ parseProcess = liftM (foldr1 Conc) $ sepBy parseProcess' (paddedChar '|')
     where
     parseProcess'  = bracketed parseProcess'' <|> parseProcess''
     parseProcess'' = parseNull 
+                <|> try parseIf
                 <|> parseIn 
                 <|> parseOut
                 <|> parseReplicate
                 <|> parseNew
                 <|> parseLet
-                <|> parseIf
 
 bracketed :: Parser a -> Parser a
 bracketed parser = do
@@ -244,15 +258,15 @@ primitives = [ ("true"      , constId "true")
 
 constId :: String -> TermFun
 constId name [] = return $ TFun name [] 0 "dummy"
-constId name _  = error $ "incorrect parity for " ++ name
+constId name e@_  = throwError $ NumArgs name 0 e
 
 unaryId :: String -> TermFun
 unaryId name [x] =  return $ TFun name [x] 1 "dummy"
-unaryId name _  = error $ "incorrect parity for " ++ name
+unaryId name e@_  = throwError $ NumArgs name 1 e
 
 binaryId :: String ->  TermFun
 binaryId name [x,y] = return $ TFun name [x,y] 2 "dummy"
-binaryId name _     = error $ "incorrect parity for " ++ name
+binaryId name e@_  = throwError $ NumArgs name 2 e
 
 getmsg :: TermFun
 getmsg [TFun "sign" [_,y] 2 _] = return y
@@ -271,14 +285,14 @@ http [TVar ip _] = undefined
 
 sdec :: TermFun
 sdec [k1, TFun "senc" [k2,y] 2 _]
-    |k1 == k2  =  return y
+    |k1 == k2  = return y
     |otherwise = error "keys not the same in sdec"
 sdec _ = error "sdec not given pair"
 
 adec :: TermFun
 adec [x , TFun "aenc" [TFun "pk" [k] 1 _, y ] 2 _]
     | x == k = return y
-    | otherwise= error $ "keys not same in adec" 
+    | otherwise= error  "keys not same in adec" 
 adec e@_ = error $ "checksign expected (x,aenc(pk(x),y)), got: " ++ show e
 
 checksign :: TermFun
@@ -311,7 +325,7 @@ evalTerm env (TFun name args _ _) = do
             fun <- getVar env name
             argVals <- mapM (evalTerm env) args
             case fun of
-                Term f@(TFun _ _ _ _) -> apply f argVals
+                Term f@(TFun{}) -> apply f argVals
                 Term _                -> throwError $ NotFunction  "" $ show fun 
                 Process _             -> throwError $ NotFunction  "" $ show fun
 
