@@ -2,6 +2,7 @@
 module Main where
 
 import Control.Arrow (second)
+import Control.Concurrent (forkIO)
 import Control.Monad (liftM, liftM2,unless)
 import Control.Monad.Error (Error(..), ErrorT(..), MonadError, catchError, throwError )
 import Control.Monad.Trans (liftIO)
@@ -23,8 +24,8 @@ data PiProcess = Null
                | If Condition PiProcess PiProcess
                  deriving (Eq)
 
-data Term = TVar Variable Type
-          | TFun Name [Term] Int Type
+data Term = TVar Variable 
+          | TFun Name [Term] Int
             deriving (Eq)
 
 data Value = Process PiProcess 
@@ -38,12 +39,14 @@ data PiError = NumArgs Name Integer [Term]
              | UnboundVar String String
              | Default String
 
+data PiType  = SomeType 
+             | Channel PiType
+
 type IOThrowsError = ErrorT PiError IO 
 type ThrowsError   = Either PiError
 
 type Variable  = String
 type Name      = String
-type Type      = String
 data Condition = Term `Equals` Term deriving (Eq)
 
 type Env = IORef [(String , IORef Value)]
@@ -66,7 +69,7 @@ setVar envRef var val = do env <- liftIO $ readIORef envRef
                                  (liftIO . flip writeIORef val)
                                  (lookup var env)
                            return val
-
+                           
 defineVar :: Env -> String -> Value -> IOThrowsError Value
 defineVar envRef var val = do
     alreadyDefined <- liftIO $ isBound envRef var
@@ -96,9 +99,9 @@ showPi (If c p1 p2) = "if " ++ show c ++ " then " ++ show p1 ++ " else " ++ show
 showPi (Let n t p) = "let " ++ show n ++ " = " ++ show t ++ " in\n" ++ show p
 
 showTerm :: Term -> String
-showTerm (TVar x _) = x
-showTerm (TFun n [] 0 _) = n ++ "()"
-showTerm (TFun n ts _ _) = n ++ "(" ++ intercalate "," (map show ts) ++ ")"
+showTerm (TVar x ) = x
+showTerm (TFun n [] 0 ) = n ++ "()"
+showTerm (TFun n ts _ ) = n ++ "(" ++ intercalate "," (map show ts) ++ ")"
 
 showCond :: Condition -> String
 showCond (t1 `Equals` t2) = show t1 ++ " == " ++ show t2
@@ -213,14 +216,14 @@ parseCondition = do
             return $ t1 `Equals` t2
 
 parseTVar :: Parser Term
-parseTVar = liftM (flip TVar "dummy") readVar 
+parseTVar = liftM TVar readVar 
 
 parseTFun :: Parser Term
 parseTFun = do
             name <- readVar
             spaces
             args <- bracketed $ sepBy parseTerm paddedComma
-            return $ TFun name args (length args) "dummy"
+            return $ TFun name args (length args) 
 
 readVar :: Parser Name
 readVar = do
@@ -292,46 +295,46 @@ primitives = [ ("true"      , constId "true")
              ]
 
 constId :: String -> TermFun
-constId name [] = return $ TFun name [] 0 "dummy"
-constId name e@_  = throwError $ NumArgs name 0 e
+constId name [] = return $ TFun name [] 0
+constId name e  = throwError $ NumArgs name 0 e
 
 unaryId :: String -> TermFun
-unaryId name [x] =  return $ TFun name [x] 1 "dummy"
-unaryId name e@_  = throwError $ NumArgs name 1 e
+unaryId name [x] =  return $ TFun name [x] 1
+unaryId name e  = throwError $ NumArgs name 1 e
 
 binaryId :: String ->  TermFun
-binaryId name [x,y] = return $ TFun name [x,y] 2 "dummy"
-binaryId name e@_  = throwError $ NumArgs name 2 e
+binaryId name [x,y] = return $ TFun name [x,y] 2 
+binaryId name e  = throwError $ NumArgs name 2 e
 
 getmsg :: TermFun
-getmsg [TFun "sign" [_,y] 2 _] = return y
-getmsg l@_ = error $  "getmsg expected sign(x,y) got: " ++ show l
+getmsg [TFun "sign" [_,y] 2] = return y
+getmsg l = error $  "getmsg expected sign(x,y) got: " ++ show l
 
 first :: TermFun
-first [TFun "pair" [x, _] 2 _] = return x
+first [TFun "pair" [x, _] 2] = return x
 first _  = error "fst not given pair"
 
 secnd :: TermFun
-secnd [TFun "pair" [_,y] 2 _] = return y
+secnd [TFun "pair" [_,y] 2] = return y
 secnd _ = error "second not given pair"
 
 http :: TermFun
-http [TVar _ _] = undefined
+http [TVar _] = undefined
 
 sdec :: TermFun
-sdec [k1, TFun "senc" [k2,y] 2 _]
+sdec [k1, TFun "senc" [k2,y] 2]
     |k1 == k2  = return y
     |otherwise = error "keys not the same in sdec"
 sdec _ = error "sdec not given pair"
 
 adec :: TermFun
-adec [x , TFun "aenc" [TFun "pk" [k] 1 _, y ] 2 _]
+adec [x , TFun "aenc" [TFun "pk" [k] 1, y ] 2]
     | x == k = return y
     | otherwise= error  "keys not same in adec" 
 adec e@_ = error $ "checksign expected (x,aenc(pk(x),y)), got: " ++ show e
 
 checksign :: TermFun
-checksign [TFun "pk" [k1] 1 _, TFun "sign" [k2,_] 2 _]
+checksign [TFun "pk" [k1] 1 , TFun "sign" [k2,_] 2 ]
     | k1 == k2 = constId "true" [] 
     | otherwise= constId "false" []
 checksign e@_ = error $ "checksign expected (pk(x),sign(x,y)), got: " ++ show e
@@ -354,16 +357,17 @@ readProgram input = case parse parseProcess "pi-calculus" input of
 evalCond :: Env -> Condition -> IOThrowsError Bool
 evalCond env (t1 `Equals` t2) = liftM2 (==) (evalTerm env t1) (evalTerm env t2)
 
+
 evalTerm :: Env -> Term -> IOThrowsError Term
-evalTerm _ val@(TVar _ _) = return val
-evalTerm env (TFun name args _ _) = do
+evalTerm _ val@(TVar _) = return val
+evalTerm env (TFun name args _) = do
             fun <- getVar env name
             argVals <- mapM (evalTerm env) args
             apply fun argVals
 
 apply :: Value -> [Term] -> IOThrowsError Term 
 apply (Function fun) args = liftThrows $ fun args
-apply e args            = throwError $ NotFunction  ("Found " ++ show e) $ show args
+apply e args              = throwError $ NotFunction  ("Found " ++ show e) $ show args
 
 liftThrows :: ThrowsError a -> IOThrowsError a
 liftThrows (Left err)  = throwError err
@@ -371,6 +375,9 @@ liftThrows (Right val) = return val
 
 runIOThrows :: IOThrowsError String -> IO String
 runIOThrows action = liftM extractValue $ runErrorT (trapError action)
+
+runCond :: IOThrowsError Bool -> IO Bool
+runCond cond = liftM extractValue $ runErrorT cond
 
 trapError :: (Show e, MonadError e m) => m String -> m String
 trapError action = catchError action (return . show)
@@ -383,15 +390,21 @@ eval _ Null               = putStrLn "Stopping Process..."
 eval _ (In _ _)           = undefined
 eval _ (Out _ _)          = undefined
 eval env (Replicate proc) = eval env $ proc `Conc` Replicate proc
-eval _ (_ `Conc` _)       = undefined
-eval _ (_ `Seq` _)        = undefined 
-eval _ (New _)            = undefined 
-eval _ (If{})             = undefined 
-eval _ (Let{})            = undefined
+eval env (p1 `Conc` p2)   = do
+            forkIO $ eval env p1
+            forkIO $ eval env p2
+            return ()
+eval env (p1 `Seq` p2)    = do
+            eval env p1
+            eval env p2
+eval env (New name)       = undefined
+eval env (If b p1 p2)     = do
+                    cond <- runCond $ evalCond env b
+                    eval env (if cond then p1 else p2)
+eval env (Let (TVar name) t2 p) = undefined
 
 evalString :: Env -> String -> IO String
 evalString env expr = runIOThrows $ liftM show $ liftThrows (readTerm expr) >>= evalTerm env
-
 
 readTerm :: String -> ThrowsError Term 
 readTerm str = case parse parseTerm "(test)" str of
