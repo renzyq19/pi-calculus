@@ -2,13 +2,14 @@
 module Main where
 
 import Control.Arrow (second)
-import Control.Monad (liftM, liftM2)
+import Control.Monad (liftM, liftM2,unless)
 import Control.Monad.Error (Error(..), ErrorT(..), MonadError, catchError, throwError )
 import Control.Monad.Trans (liftIO)
 import Data.IORef (IORef, newIORef, readIORef,writeIORef)
 import Data.List (intercalate)
 import Data.Maybe (isJust)
 import System.Environment (getArgs)
+import System.IO (hFlush, stdout)
 import Text.ParserCombinators.Parsec
 
 data PiProcess = Null
@@ -402,3 +403,19 @@ evalAndPrint env expr = evalString env expr >>= putStrLn
 
 runTerm :: String -> IO ()
 runTerm expr = primitiveBindings >>= flip evalAndPrint expr
+
+runTermRepl :: IO ()
+runTermRepl = primitiveBindings >>= until_ quit (readPrompt "\\pi -> ") . evalAndPrint
+        where
+            quit = flip any [":quit",":q"] . (==)
+
+until_ :: Monad m => (a -> Bool) -> m a -> (a -> m ()) -> m ()
+until_ pre prompt action = do
+    result <- prompt
+    unless (pre result) $ action result >> until_ pre prompt action
+
+readPrompt :: String -> IO String
+readPrompt prompt = flushStr prompt >> getLine
+
+flushStr :: String -> IO ()
+flushStr str = putStr str >> hFlush stdout
