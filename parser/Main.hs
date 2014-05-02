@@ -3,7 +3,7 @@ module Main where
 
 import Control.Arrow (second)
 import Control.Concurrent (forkIO)
-import Control.Monad (liftM, liftM2,unless)
+import Control.Monad (forever, liftM, liftM2,unless)
 import Control.Monad.Error (Error(..), ErrorT(..), MonadError, catchError, throwError )
 import Control.Monad.Trans (liftIO)
 import Data.IORef (IORef, newIORef, readIORef,writeIORef)
@@ -12,6 +12,7 @@ import Data.Maybe (isJust)
 import System.Environment (getArgs)
 import System.IO (hFlush, stdout)
 import Text.ParserCombinators.Parsec
+import qualified Network.WebSockets as WS 
 
 data PiProcess = Null
                | In   Term Term
@@ -376,8 +377,8 @@ liftThrows (Right val) = return val
 runIOThrows :: IOThrowsError String -> IO String
 runIOThrows action = liftM extractValue $ runErrorT (trapError action)
 
-runCond :: IOThrowsError Bool -> IO Bool
-runCond cond = liftM extractValue $ runErrorT cond
+runIOThrows' :: IOThrowsError a -> IO a
+runIOThrows' action = liftM extractValue $ runErrorT action
 
 trapError :: (Show e, MonadError e m) => m String -> m String
 trapError action = catchError action (return . show)
@@ -387,9 +388,16 @@ extractValue (Right v) = v
 
 eval :: Env -> PiProcess -> IO ()
 eval _ Null               = putStrLn "Stopping Process..."
-eval _ (In _ _)           = undefined
-eval _ (Out _ _)          = undefined
-eval env (Replicate proc) = eval env $ proc `Conc` Replicate proc
+eval env (In a b)           = do
+                        astr <- runIOThrows' $ evalTerm env a
+                        bstr <- runIOThrows' $ evalTerm env b
+                        putStrLn $ "recieving " ++ show astr ++ " on " ++ show bstr
+                        
+eval env (Out a b)          = do 
+                        astr <- runIOThrows' $ evalTerm env a
+                        bstr <- runIOThrows' $ evalTerm env b
+                        putStrLn $ "sending " ++ show astr ++ " on " ++ show bstr
+eval env (Replicate proc) = forever $ eval env proc 
 eval env (p1 `Conc` p2)   = do
             forkIO $ eval env p1
             forkIO $ eval env p2
@@ -399,7 +407,7 @@ eval env (p1 `Seq` p2)    = do
             eval env p2
 eval env (New name)       = undefined
 eval env (If b p1 p2)     = do
-                    cond <- runCond $ evalCond env b
+                    cond <- runIOThrows' $ evalCond env b
                     eval env (if cond then p1 else p2)
 eval env (Let (TVar name) t2 p) = undefined
 
@@ -432,3 +440,9 @@ readPrompt prompt = flushStr prompt >> getLine
 
 flushStr :: String -> IO ()
 flushStr str = putStr str >> hFlush stdout
+
+sendOut :: Value -> WS.ServerApp
+sendOut = undefined
+
+receiveIn :: WS.ClientApp ()
+receiveIn = undefined
