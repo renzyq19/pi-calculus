@@ -3,7 +3,7 @@ module Main where
 
 import Control.Arrow (second)
 import Control.Concurrent (forkIO)
-import Control.Monad (forever, liftM, liftM2,unless)
+import Control.Monad (forever, join, liftM, liftM2, unless)
 import Control.Monad.Error (Error(..), ErrorT(..), MonadError, catchError, throwError )
 import Control.Monad.Trans (liftIO)
 import Data.IORef (IORef, newIORef, readIORef,writeIORef)
@@ -25,7 +25,7 @@ data PiProcess = Null
                | If Condition PiProcess PiProcess
                  deriving (Eq)
 
-data Term = TVar Variable 
+data Term = TVar Name 
           | TFun Name [Term] Int
             deriving (Eq)
 
@@ -34,10 +34,11 @@ data Value = Process PiProcess
            | Function TermFun
 
 data PiError = NumArgs Name Integer [Term]
-             | TypeMismatch String Value
+             | TypeMismatch String [Value]
              | Parser ParseError
              | NotFunction String String
              | UnboundVar String String
+             | NotTerm Name Value
              | Default String
 
 data PiType  = SomeType 
@@ -46,7 +47,6 @@ data PiType  = SomeType
 type IOThrowsError = ErrorT PiError IO 
 type ThrowsError   = Either PiError
 
-type Variable  = String
 type Name      = String
 data Condition = Term `Equals` Term deriving (Eq)
 
@@ -166,6 +166,12 @@ paddedChar ch = do
             char ch
             spaces
 
+paddedStr :: String -> Parser ()
+paddedStr str = do
+            spaces
+            string str
+            spaces
+
 parseSeq :: PiProcess -> Parser PiProcess
 parseSeq p1 = do
             paddedChar ';'
@@ -184,13 +190,9 @@ parseIf = do
             string "if" 
             spaces
             cond <- parseCondition
-            spaces
-            string "then"
-            spaces
+            paddedStr "then"
             p1 <- parseProcess
-            spaces
-            string "else"
-            spaces
+            paddedStr "else"
             p2 <- parseProcess
             return $ If cond p1 p2
 
@@ -201,18 +203,14 @@ parseLet = do
             name <- parseTerm
             paddedChar '='
             term <- parseTerm
-            spaces
-            string "in"
-            spaces
+            paddedStr "in"
             p   <- parseProcess
             return $ Let name term p
 
 parseCondition :: Parser Condition
 parseCondition = do
             t1 <- parseTerm
-            spaces
-            string "=="
-            spaces
+            paddedStr "=="
             t2 <- parseTerm
             return $ t1 `Equals` t2
 
@@ -233,7 +231,7 @@ readVar = do
             return $ frst:rest
 
 symbol :: Parser Char
-symbol = oneOf ".'"
+symbol = oneOf "'._"
 
 paddedComma :: Parser ()
 paddedComma = paddedChar ','
@@ -248,12 +246,12 @@ parseProcess = liftM (foldr1 Conc) $ sepBy parseProcess' (paddedChar '|')
     where
     parseProcess'  = bracketed parseProcess'' <|> parseProcess''
     parseProcess'' = parseNull 
-                <|> try parseIf
-                <|> parseIn 
-                <|> parseOut
-                <|> parseReplicate
-                <|> parseNew
-                <|> parseLet
+                 <|> try parseIf
+                 <|> parseIn 
+                 <|> parseOut
+                 <|> parseReplicate
+                 <|> parseNew
+                 <|> parseLet
 
 bracketed :: Parser a -> Parser a
 bracketed parser = do
@@ -265,7 +263,6 @@ bracketed parser = do
                     return res
 
 type TermFun = [Term] -> ThrowsError Term
-
 
 bindVars :: Env -> [(String , Value)] -> IO Env
 bindVars envRef bindings = readIORef envRef >>= extendEnv bindings >>= newIORef
@@ -309,15 +306,15 @@ binaryId name e  = throwError $ NumArgs name 2 e
 
 getmsg :: TermFun
 getmsg [TFun "sign" [_,y] 2] = return y
-getmsg l = error $  "getmsg expected sign(x,y) got: " ++ show l
+getmsg e = throwError $ TypeMismatch "sign" $ map Term e
 
 first :: TermFun
 first [TFun "pair" [x, _] 2] = return x
-first _  = error "fst not given pair"
+first e = throwError $ TypeMismatch "pair" $ map Term e 
 
 secnd :: TermFun
 secnd [TFun "pair" [_,y] 2] = return y
-secnd _ = error "second not given pair"
+secnd e = throwError $ TypeMismatch "pair" $ map Term e 
 
 http :: TermFun
 http [TVar _] = undefined
@@ -325,20 +322,20 @@ http [TVar _] = undefined
 sdec :: TermFun
 sdec [k1, TFun "senc" [k2,y] 2]
     |k1 == k2  = return y
-    |otherwise = error "keys not the same in sdec"
-sdec _ = error "sdec not given pair"
+    |otherwise = throwError $ Default "keys not the same in sdec"
+sdec e = throwError $ TypeMismatch "(var,senc(var,var))" $ map Term e
 
 adec :: TermFun
 adec [x , TFun "aenc" [TFun "pk" [k] 1, y ] 2]
     | x == k = return y
-    | otherwise= error  "keys not same in adec" 
-adec e@_ = error $ "checksign expected (x,aenc(pk(x),y)), got: " ++ show e
+    | otherwise= throwError $ Default "keys not same in adec" 
+adec e = throwError $ TypeMismatch "(var,aenc(pk(var),var))" $ map Term e
 
 checksign :: TermFun
 checksign [TFun "pk" [k1] 1 , TFun "sign" [k2,_] 2 ]
-    | k1 == k2 = constId "true" [] 
-    | otherwise= constId "false" []
-checksign e@_ = error $ "checksign expected (pk(x),sign(x,y)), got: " ++ show e
+    | k1 == k2  = constId "true" [] 
+    | otherwise = constId "false" []
+checksign e = throwError $ TypeMismatch "(pk(var),sign(var,var))" $ map Term e
 
 main :: IO ()
 main = do
@@ -347,20 +344,23 @@ main = do
                     []  -> readFile "test.pi" 
                     [x] -> return x
         progs <- liftM lines f
-        putStrLn $ intercalate  "\n\n" $ map readProgram progs
         putStrLn ""
 
-readProgram :: String ->  String
+readProgram :: String ->  ThrowsError PiProcess
 readProgram input = case parse parseProcess "pi-calculus" input of
-                        Left  err -> show err
-                        Right val -> show val 
+                        Left  err -> throwError $ Parser err
+                        Right val -> return val 
 
 evalCond :: Env -> Condition -> IOThrowsError Bool
 evalCond env (t1 `Equals` t2) = liftM2 (==) (evalTerm env t1) (evalTerm env t2)
 
 
 evalTerm :: Env -> Term -> IOThrowsError Term
-evalTerm _ val@(TVar _) = return val
+evalTerm env (TVar name) = do
+            var <- getVar env name
+            case var of
+                Term term -> return term
+                _         -> throwError $ NotTerm name var  
 evalTerm env (TFun name args _) = do
             fun <- getVar env name
             argVals <- mapM (evalTerm env) args
@@ -385,18 +385,18 @@ trapError action = catchError action (return . show)
 
 extractValue :: ThrowsError a -> a
 extractValue (Right v) = v
+extractValue (Left  e) = error $ show e
 
 eval :: Env -> PiProcess -> IO ()
-eval _ Null               = putStrLn "Stopping Process..."
-eval env (In a b)           = do
-                        astr <- runIOThrows' $ evalTerm env a
-                        bstr <- runIOThrows' $ evalTerm env b
-                        putStrLn $ "recieving " ++ show astr ++ " on " ++ show bstr
-                        
-eval env (Out a b)          = do 
-                        astr <- runIOThrows' $ evalTerm env a
-                        bstr <- runIOThrows' $ evalTerm env b
-                        putStrLn $ "sending " ++ show astr ++ " on " ++ show bstr
+eval _ Null        = putStrLn "Stopping Process..."
+eval env (In a var@(TVar name))  = do
+                    astr <- runIOThrows' $ evalTerm env a
+                    runIOThrows' $ setVar env name (Term var)
+                    putStrLn $ "Receiving " ++ show var ++ " On " ++ show astr
+eval env (Out a b) = do 
+                    astr <- runIOThrows' $ evalTerm env a
+                    bstr <- runIOThrows' $ evalTerm env b
+                    putStrLn $ "Sending " ++ show bstr ++ " On " ++ show astr
 eval env (Replicate proc) = forever $ eval env proc 
 eval env (p1 `Conc` p2)   = do
             forkIO $ eval env p1
@@ -405,14 +405,19 @@ eval env (p1 `Conc` p2)   = do
 eval env (p1 `Seq` p2)    = do
             eval env p1
             eval env p2
-eval env (New name)       = undefined
+eval env (New var@(TVar name))       = do
+            runIOThrows' $ defineVar env name $ Term var
+            return ()
 eval env (If b p1 p2)     = do
-                    cond <- runIOThrows' $ evalCond env b
-                    eval env (if cond then p1 else p2)
-eval env (Let (TVar name) t2 p) = undefined
+            cond <- runIOThrows' $ evalCond env b
+            eval env (if cond then p1 else p2)
+eval env (Let (TVar name) t2 p) = do
+            term <- runIOThrows' $ evalTerm env t2 
+            runIOThrows' $ defineVar env name $ Term term
+            eval env p
 
 evalString :: Env -> String -> IO String
-evalString env expr = runIOThrows $ liftM show $ liftThrows (readTerm expr) >>= evalTerm env
+evalString env expr = undefined -- runIOThrows $ liftM show $ liftThrows (readProgram expr) >>= eval env
 
 readTerm :: String -> ThrowsError Term 
 readTerm str = case parse parseTerm "(test)" str of
@@ -446,3 +451,10 @@ sendOut = undefined
 
 receiveIn :: WS.ClientApp ()
 receiveIn = undefined
+
+runProgram :: String -> IO()
+runProgram code = join $ liftM2 eval primitiveBindings (runIOThrows' .liftThrows. readProgram $ code)
+
+teststr :: String
+teststr = "new c; new xpk; new sks; in(c,xpk);new k ; out(c, aenc(xpk, sign(sks,k))); let z = senc(k,pair(true(),false())) in if fst(sdec(k, z)) == true() then 0 else 0"
+
