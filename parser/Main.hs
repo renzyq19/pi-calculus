@@ -2,17 +2,16 @@
 module Main where
 
 import Control.Arrow (second)
-import Control.Concurrent (forkIO)
-import Control.Monad (forever, join, liftM, liftM2, unless)
+import Control.Concurrent (forkIO,threadDelay)
+import Control.Monad (join, liftM, liftM2, unless)
 import Control.Monad.Error (Error(..), ErrorT(..), MonadError, catchError, throwError )
 import Control.Monad.Trans (liftIO)
 import Data.IORef (IORef, newIORef, readIORef,writeIORef)
 import Data.List (intercalate)
 import Data.Maybe (isJust)
 import System.Environment (getArgs)
-import System.IO (hFlush, stdout)
+import System.IO (Handle, hFlush, stderr, stdin, stdout)
 import Text.ParserCombinators.Parsec
-import qualified Network.WebSockets as WS 
 
 data PiProcess = Null
                | In   Term Term
@@ -31,6 +30,7 @@ data Term = TVar Name
 
 data Value = Process PiProcess 
            | Term Term
+           | Channel Channel
            | Function TermFun
 
 data PiError = NumArgs Name Integer [Term]
@@ -41,13 +41,11 @@ data PiError = NumArgs Name Integer [Term]
              | NotTerm Name Value
              | Default String
 
-data PiType  = SomeType 
-             | Channel PiType
-
 type IOThrowsError = ErrorT PiError IO 
 type ThrowsError   = Either PiError
 
 type Name      = String
+type Channel   = Handle
 data Condition = Term `Equals` Term deriving (Eq)
 
 type Env = IORef [(String , IORef Value)]
@@ -85,6 +83,7 @@ defineVar envRef var val = do
 showValue :: Value -> String
 showValue (Process p)  = show p
 showValue (Term t)     = show t
+showValue (Channel c)  = show c
 showValue (Function _) = "Function" 
 
 showPi :: PiProcess -> String
@@ -271,7 +270,13 @@ bindVars envRef bindings = readIORef envRef >>= extendEnv bindings >>= newIORef
         addBinding (var,val) = liftM (var,) $ newIORef val
 
 primitiveBindings :: IO Env
-primitiveBindings = nullEnv >>= flip bindVars (map  (second Function) primitives)
+primitiveBindings = nullEnv >>= flip bindVars (map (second Function) primitives)
+
+nativeChannels :: [(String   , Channel)]
+nativeChannels = [ ("stdin"  , stdin) 
+                 , ("stdout" , stdout)
+                 , ("stderr" , stderr)
+                 ]
 
 primitives :: [(String      , TermFun)]
 primitives = [ ("true"      , constId "true")
@@ -344,6 +349,7 @@ main = do
                     []  -> readFile "test.pi" 
                     [x] -> return x
         progs <- liftM lines f
+        --mapM_ runProgram progs
         putStrLn ""
 
 readProgram :: String ->  ThrowsError PiProcess
@@ -397,7 +403,7 @@ eval env (Out a b) = do
                     astr <- runIOThrows' $ evalTerm env a
                     bstr <- runIOThrows' $ evalTerm env b
                     putStrLn $ "Sending " ++ show bstr ++ " On " ++ show astr
-eval env (Replicate proc) = forever $ eval env proc 
+eval env (Replicate proc) = threadDelay 1000000 >> eval env ( proc `Conc` Replicate proc)
 eval env (p1 `Conc` p2)   = do
             forkIO $ eval env p1
             forkIO $ eval env p2
@@ -446,15 +452,14 @@ readPrompt prompt = flushStr prompt >> getLine
 flushStr :: String -> IO ()
 flushStr str = putStr str >> hFlush stdout
 
-sendOut :: Value -> WS.ServerApp
-sendOut = undefined
+sendOut :: Channel -> Value -> IO () 
+sendOut chan val = undefined
 
-receiveIn :: WS.ClientApp ()
-receiveIn = undefined
+receiveIn :: Channel -> IO Value
+receiveIn chan = undefined
 
 runProgram :: String -> IO()
 runProgram code = join $ liftM2 eval primitiveBindings (runIOThrows' .liftThrows. readProgram $ code)
 
 teststr :: String
 teststr = "new c; new xpk; new sks; in(c,xpk);new k ; out(c, aenc(xpk, sign(sks,k))); let z = senc(k,pair(true(),false())) in if fst(sdec(k, z)) == true() then 0 else 0"
-
