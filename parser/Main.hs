@@ -10,7 +10,7 @@ import Data.IORef (IORef, newIORef, readIORef,writeIORef)
 import Data.List (intercalate)
 import Data.Maybe (isJust)
 import System.Environment (getArgs)
-import System.IO (Handle, hFlush, stderr, stdin, stdout)
+import System.IO (Handle, hFlush, hGetContents, hPutStr, stderr, stdin, stdout)
 import Text.ParserCombinators.Parsec
 
 data PiProcess = Null
@@ -41,11 +41,16 @@ data PiError = NumArgs Name Integer [Term]
              | NotTerm Name Value
              | Default String
 
+data Channel = Channel 
+             { handle      :: Handle
+             , chanType    :: Type
+             , serialize   :: Value -> String
+             , deserialize :: String-> Value}
+
 type IOThrowsError = ErrorT PiError IO 
 type ThrowsError   = Either PiError
 
 type Name      = String
-type Channel   = Handle
 data Condition = Term `Equals` Term deriving (Eq)
 
 type Env = IORef [(String , IORef Value)]
@@ -397,11 +402,13 @@ eval :: Env -> PiProcess -> IO ()
 eval _ Null        = putStrLn "Stopping Process..."
 eval env (In a var@(TVar name))  = do
                     astr <- runIOThrows' $ evalTerm env a
+                    chan <- getChannel env astr
                     runIOThrows' $ setVar env name (Term var)
                     putStrLn $ "Receiving " ++ show var ++ " On " ++ show astr
 eval env (Out a b) = do 
                     astr <- runIOThrows' $ evalTerm env a
                     bstr <- runIOThrows' $ evalTerm env b
+                    chan <- getChannel env astr
                     putStrLn $ "Sending " ++ show bstr ++ " On " ++ show astr
 eval env (Replicate proc) = threadDelay 1000000 >> eval env ( proc `Conc` Replicate proc)
 eval env (p1 `Conc` p2)   = do
@@ -453,10 +460,19 @@ flushStr :: String -> IO ()
 flushStr str = putStr str >> hFlush stdout
 
 sendOut :: Channel -> Value -> IO () 
-sendOut chan val = undefined
+sendOut chan val = hPutStr chan $ serialize val 
 
 receiveIn :: Channel -> IO Value
-receiveIn chan = undefined
+receiveIn chan = liftM deserialize $ hGetContents chan
+
+serialize :: Value -> String
+serialize = show 
+
+deserialize :: String -> Value
+deserialize = undefined
+
+getChannel :: Env -> Term -> IO Channel
+getChannel env (TVar name) = undefined
 
 runProgram :: String -> IO()
 runProgram code = join $ liftM2 eval primitiveBindings (runIOThrows' .liftThrows. readProgram $ code)
