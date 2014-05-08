@@ -2,14 +2,15 @@
 module Main where
 
 import Control.Arrow (second)
-import Control.Concurrent (forkIO,killThread, myThreadId, threadDelay)
+import Control.Concurrent (forkIO, killThread, myThreadId, threadDelay)
 import Control.Monad (liftM, liftM2, unless)
 import Control.Monad.Error (throwError)
 import Control.Monad.Trans (liftIO)
-import Control.Monad.Trans.Except (ExceptT(..), runExceptT, throwE)
+import Control.Monad.Trans.Except (ExceptT(..), catchE, runExceptT, throwE)
 import Data.IORef (IORef, newIORef, readIORef,writeIORef)
 import Data.List (intercalate)
 import Data.Maybe (isJust)
+import System.Environment (getArgs)
 import System.IO (Handle, hFlush, hGetContents, hPutStr, stderr, stdin, stdout)
 import Text.ParserCombinators.Parsec
 
@@ -274,8 +275,11 @@ bindVars envRef bindings = readIORef envRef >>= extendEnv bindings >>= newIORef
         extendEnv bs env     = liftM (++ env) (mapM addBinding bs)
         addBinding (var,val) = liftM (var,) $ newIORef val
 
-primitiveBindings :: IO Env
-primitiveBindings = nullEnv >>= flip bindVars (map (second Func) primitives)
+coreBindings :: IO Env
+coreBindings = do
+                n <- nullEnv 
+                e1   <- bindVars n (map (second Func) primitives) 
+                bindVars e1 (map (second Chan) nativeChannels)
 
 stdStrChan :: Handle -> Channel
 stdStrChan h = Channel h "string" show undefined
@@ -353,9 +357,16 @@ checksign e = throwError $ TypeMismatch "(pk(var),sign(var,var))" $ map Term e
 
 main :: IO ()
 main = do
+        args <- getArgs
+        case args of
+            []  -> runRepl
+            [x] -> runProcess x
+            _   -> do
+                    putStrLn "Use:"
+                    putStrLn "phi  -- Enter the REPL"
+                    putStrLn "phi [process] -- Run single process"
+                            
         
-        
-
 readProgram :: String ->  ThrowsError PiProcess
 readProgram input = case parse parseProcess "pi-calculus" input of
                         Left  err -> throwError $ Parser err
@@ -423,7 +434,13 @@ eval env (Let (TVar name) t2 p) = do
 eval _ _ = undefined
 
 evalString :: Env -> String -> IO String
-evalString _ _  = undefined
+evalString env expr = runIOThrows $ liftM show $ liftThrows (readProgram expr) >>= eval env
+
+runIOThrows :: IOThrowsError String -> IO String
+runIOThrows action = liftM extractValue $ runExceptT (trapError action)
+
+trapError :: IOThrowsError String -> IOThrowsError String
+trapError action = catchE action (return . show)
 
 readTerm :: String -> ThrowsError Term 
 readTerm str = case parse parseTerm "(test)" str of
@@ -433,11 +450,11 @@ readTerm str = case parse parseTerm "(test)" str of
 evalAndPrint :: Env -> String -> IO ()
 evalAndPrint env expr = evalString env expr >>= putStrLn
 
-runTerm :: String -> IO ()
-runTerm expr = primitiveBindings >>= flip evalAndPrint expr
+runProcess :: String -> IO ()
+runProcess expr = coreBindings >>= flip evalAndPrint expr
 
-runTermRepl :: IO ()
-runTermRepl = primitiveBindings >>= until_ quit (readPrompt "\\pi -> ") . evalAndPrint
+runRepl :: IO ()
+runRepl = coreBindings >>= until_ quit (readPrompt "\\pi -> ") . evalAndPrint
         where
             quit = flip any [":quit",":q"] . (==)
 
