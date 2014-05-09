@@ -11,7 +11,7 @@ import Data.IORef (IORef, newIORef, readIORef,writeIORef)
 import Data.List (intercalate)
 import Data.Maybe (isJust)
 import System.Environment (getArgs)
-import System.IO (Handle, IOMode(..), hFlush, hGetContents, hPutStr,openFile, stderr, stdin, stdout)
+import System.IO (Handle, IOMode(..), hFlush, hGetContents, hPutStrLn,openFile, stderr, stdin, stdout)
 import Text.ParserCombinators.Parsec
 
 data PiProcess = Null
@@ -401,8 +401,8 @@ evalTerm env (TVar name) = do
             case var of
                 Term term -> return term
                 _         -> throwE $ NotTerm name var  
-evalTerm env (TNum num) = return $ TNum num
-evalTerm env (TStr str) = return $ TStr str
+evalTerm _ (TNum num) = return $ TNum num
+evalTerm _ (TStr str) = return $ TStr str
 evalTerm env (TFun name args _) = do
             fun <- getVar env name
             argVals <- mapM (evalTerm env) args
@@ -490,7 +490,7 @@ flushStr :: String -> IO ()
 flushStr str = putStr str >> hFlush stdout
 
 sendOut :: Channel -> Value -> IOThrowsError () 
-sendOut chan val = liftIO $ hPutStr (handle chan) $ serialize chan val 
+sendOut chan val = liftIO $ hPutStrLn (handle chan) $ serialize chan val 
 
 receiveIn :: Channel -> IOThrowsError Value
 receiveIn chan = liftIO $ liftM (deserialize chan) $ hGetContents (handle chan)
@@ -501,8 +501,16 @@ evalChan env (TVar name) = do
             case val of
                 Chan c -> return c
                 _      -> throwE $ NotChannel name
-evalChan env (TFun "file" [TStr str] 1) = fileChan str
-evalChan env (TFun "http" [TStr _] 1) = throwE $ Default "http undefined"
+evalChan _ (TFun "file" [TStr str] 1) = fileChan str
+evalChan _ (TFun "http" [TStr _] 1) = throwE $ Default "http channels undefined"
+evalChan _ (TNum num) = case num of
+                            0   -> return $ stdStrChan stdin 
+                            1   -> return $ stdStrChan stdout
+                            2   -> return $ stdStrChan stderr 
+                            _   -> throwE $ NotChannel $ show num
+evalChan _ (TStr str) = throwE $ NotChannel str
+evalChan _ _        = throwE $ Default "undefined channel"
+
 
 teststr :: String
 teststr = "new c; new xpk; new sks; in(c,xpk);new k ; out(c, aenc(xpk, sign(sks,k))); let z = senc(k,pair(true(),false())) in if fst(sdec(k, z)) == true() then 0 else 0"
