@@ -48,8 +48,8 @@ data PiError = NumArgs Name Integer [Term]
 data Channel = Channel { 
                handle      :: Handle
              , chanType    :: Type
-             , serialize   :: Value -> String
-             , deserialize :: String-> Value
+             , serialize   :: Value  -> String
+             , deserialize :: String -> IOThrowsError Value
              }
 
 type IOThrowsError = ExceptT PiError IO 
@@ -297,7 +297,9 @@ coreBindings = do
                 bindVars e1 (map (second Chan) nativeChannels)
 
 stdStrChan :: Handle -> Channel
-stdStrChan h = Channel h "string" show undefined
+stdStrChan h = Channel h "string" show dSer
+    where
+        dSer str = liftM Term $ liftThrows $ readTerm str 
 
 fileChan :: FilePath -> IOThrowsError Channel
 fileChan file = do
@@ -455,7 +457,7 @@ eval env (Let (TVar name) t2 p) = do
             term <- evalTerm env t2 
             _ <- defineVar env name $ Term term
             eval env p
-eval _ _ = undefined
+eval _ _ = throwE $ Default "undefined action"
 
 evalString :: Env -> String -> IO String
 evalString env expr = runIOThrows $ liftM show $ liftThrows (readProgram expr) >>= eval env
@@ -467,7 +469,7 @@ trapError :: IOThrowsError String -> IOThrowsError String
 trapError action = catchE action (return . show)
 
 readTerm :: String -> ThrowsError Term 
-readTerm str = case parse parseTerm "(test)" str of
+readTerm str = case parse parseTerm "Term" str of
                 Left  err -> throwError $ Parser err
                 Right val -> return val 
 
@@ -498,7 +500,9 @@ sendOut :: Channel -> Value -> IOThrowsError ()
 sendOut chan val = liftIO $ hPutStrLn (handle chan) $ serialize chan val 
 
 receiveIn :: Channel -> IOThrowsError Value
-receiveIn chan = liftIO $ liftM (deserialize chan) $ hGetLine (handle chan)
+receiveIn chan = do 
+            message <- liftIO $ hGetLine $ handle chan 
+            deserialize chan message
 
 evalChan :: Env -> Term -> IOThrowsError Channel
 evalChan env (TVar name) = do
@@ -506,12 +510,8 @@ evalChan env (TVar name) = do
             case val of
                 Chan c -> return c
                 _      -> throwE $ NotChannel name
-evalChan _ (TFun "file" [TStr str] 1) = fileChan str
-evalChan _ (TFun "http" [_] 1) = throwE $ Default "http channels undefined"
+evalChan _   (TFun "file" [TStr str] 1) = fileChan str
+evalChan _   (TFun "http" [_] 1) = throwE $ Default "http channels undefined"
 evalChan env (TNum num) = evalChan env $ TVar . show $ num
-evalChan _ (TStr str)   = throwE $ NotChannel str
-evalChan _ _            = throwE $ Default "undefined channel"
-
-
-teststr :: String
-teststr = "new c; new xpk; new sks; in(c,xpk);new k ; out(c, aenc(xpk, sign(sks,k))); let z = senc(k,pair(true(),false())) in if fst(sdec(k, z)) == true() then 0 else 0"
+evalChan _   (TStr str) = throwE $ NotChannel str
+evalChan _ _ = throwE $ Default "undefined channel"
