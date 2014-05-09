@@ -2,7 +2,7 @@
 module Main where
 
 import Control.Arrow (second)
-import Control.Concurrent (forkIO, killThread, myThreadId, threadDelay)
+import Control.Concurrent (forkIO, myThreadId, threadDelay)
 import Control.Monad (liftM, liftM2, unless)
 import Control.Monad.Error (throwError)
 import Control.Monad.Trans (liftIO)
@@ -11,7 +11,7 @@ import Data.IORef (IORef, newIORef, readIORef,writeIORef)
 import Data.List (intercalate)
 import Data.Maybe (isJust)
 import System.Environment (getArgs)
-import System.IO (Handle, IOMode(..), hFlush, hGetContents, hPutStrLn,openFile, stderr, stdin, stdout)
+import System.IO (Handle, IOMode(..), hFlush, hGetLine, hPutStrLn,openFile, stderr, stdin, stdout)
 import Text.ParserCombinators.Parsec
 
 data PiProcess = Null
@@ -306,8 +306,11 @@ fileChan file = do
 
 nativeChannels :: [(String   , Channel)]
 nativeChannels = [ ("stdin"  , stdStrChan stdin) 
+                 , ("0"      , stdStrChan stdin) 
                  , ("stdout" , stdStrChan stdout)
+                 , ("1"      , stdStrChan stdout)
                  , ("stderr" , stdStrChan stderr)
+                 , ("2"      , stdStrChan stderr)
                  ]
 
 primitives :: [(String      , TermFun)]
@@ -421,8 +424,9 @@ extractValue (Right v) = v
 extractValue (Left  e) = error $ show e
 
 eval :: Env -> PiProcess -> IOThrowsError () 
-eval _ Null        = liftIO $ --do
-                        putStrLn "Stopping Process..."
+eval _ Null        = liftIO $ do
+                        threadId <- myThreadId
+                        putStrLn $ "Stopping Process : " ++ show threadId
                         --myThreadId >>= killThread
 eval env (In a (TVar name))  = do
                     chan <- evalChan env a
@@ -474,7 +478,7 @@ runProcess :: String -> IO ()
 runProcess expr = coreBindings >>= flip evalAndPrint expr
 
 runRepl :: IO ()
-runRepl = coreBindings >>= until_ quit (readPrompt "\\pi -> ") . evalAndPrint
+runRepl = coreBindings >>= until_ quit (readPrompt "phi >> ") . evalAndPrint
         where
             quit = flip any [":quit",":q"] . (==)
 
@@ -493,7 +497,7 @@ sendOut :: Channel -> Value -> IOThrowsError ()
 sendOut chan val = liftIO $ hPutStrLn (handle chan) $ serialize chan val 
 
 receiveIn :: Channel -> IOThrowsError Value
-receiveIn chan = liftIO $ liftM (deserialize chan) $ hGetContents (handle chan)
+receiveIn chan = liftIO $ liftM (deserialize chan) $ hGetLine (handle chan)
 
 evalChan :: Env -> Term -> IOThrowsError Channel
 evalChan env (TVar name) = do
@@ -503,13 +507,9 @@ evalChan env (TVar name) = do
                 _      -> throwE $ NotChannel name
 evalChan _ (TFun "file" [TStr str] 1) = fileChan str
 evalChan _ (TFun "http" [TStr _] 1) = throwE $ Default "http channels undefined"
-evalChan _ (TNum num) = case num of
-                            0   -> return $ stdStrChan stdin 
-                            1   -> return $ stdStrChan stdout
-                            2   -> return $ stdStrChan stderr 
-                            _   -> throwE $ NotChannel $ show num
-evalChan _ (TStr str) = throwE $ NotChannel str
-evalChan _ _        = throwE $ Default "undefined channel"
+evalChan env (TNum num) = evalChan env $ TVar . show $ num
+evalChan _ (TStr str)   = throwE $ NotChannel str
+evalChan _ _            = throwE $ Default "undefined channel"
 
 
 teststr :: String
