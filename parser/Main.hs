@@ -29,7 +29,7 @@ data Term = TVar Name
           | TStr String
           | TNum Integer
           | TFun Name [Term] Int
-            deriving (Eq,Show)
+            deriving (Eq)
 
 data Value = Proc PiProcess 
            | Term Term
@@ -133,7 +133,7 @@ showError (Parser parseErr)             = "Parse error at " ++ show parseErr
 showError (Default msg)                 = msg
 
 instance Show PiProcess where show = showPi
---instance Show Term      where show = showTerm
+instance Show Term      where show = showTerm
 instance Show Condition where show = showCond
 instance Show Value     where show = showValue
 instance Show PiError   where show = showError
@@ -472,6 +472,7 @@ readTerm str = case parse parseTerm "(test)" str of
                 Right val -> return val 
 
 evalAndPrint :: Env -> String -> IO ()
+evalAndPrint _   []   = return () 
 evalAndPrint env expr = evalString env expr >>= putStrLn
 
 runProcess :: String -> IO ()
@@ -506,7 +507,7 @@ evalChan env (TVar name) = do
                 Chan c -> return c
                 _      -> throwE $ NotChannel name
 evalChan _ (TFun "file" [TStr str] 1) = fileChan str
-evalChan _ (TFun "http" [TStr _] 1) = throwE $ Default "http channels undefined"
+evalChan _ (TFun "http" [_] 1) = throwE $ Default "http channels undefined"
 evalChan env (TNum num) = evalChan env $ TVar . show $ num
 evalChan _ (TStr str)   = throwE $ NotChannel str
 evalChan _ _            = throwE $ Default "undefined channel"
