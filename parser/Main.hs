@@ -11,7 +11,7 @@ import Data.IORef (IORef, newIORef, readIORef,writeIORef)
 import Data.List (intercalate)
 import Data.Maybe (isJust)
 import System.Environment (getArgs)
-import System.IO (Handle, hFlush, hGetContents, hPutStr, stderr, stdin, stdout)
+import System.IO (Handle, IOMode(..), hFlush, hGetContents, hPutStr,openFile, stderr, stdin, stdout)
 import Text.ParserCombinators.Parsec
 
 data PiProcess = Null
@@ -26,8 +26,10 @@ data PiProcess = Null
                  deriving (Eq)
 
 data Term = TVar Name 
+          | TStr String
+          | TNum Integer
           | TFun Name [Term] Int
-            deriving (Eq)
+            deriving (Eq,Show)
 
 data Value = Proc PiProcess 
            | Term Term
@@ -109,7 +111,9 @@ showPi (If c p1 p2)   = "if " ++ show c ++ " then " ++ show p1 ++ " else " ++ sh
 showPi (Let n t p)    = "let " ++ show n ++ " = " ++ show t ++ " in\n" ++ show p
 
 showTerm :: Term -> String
-showTerm (TVar x ) = x
+showTerm (TVar x)   = x
+showTerm (TStr str) = str
+showTerm (TNum num) = show num
 showTerm (TFun n [] 0 ) = n ++ "()"
 showTerm (TFun n ts _ ) = n ++ "(" ++ intercalate "," (map show ts) ++ ")"
 
@@ -129,7 +133,7 @@ showError (Parser parseErr)             = "Parse error at " ++ show parseErr
 showError (Default msg)                 = msg
 
 instance Show PiProcess where show = showPi
-instance Show Term      where show = showTerm
+--instance Show Term      where show = showTerm
 instance Show Condition where show = showCond
 instance Show Value     where show = showValue
 instance Show PiError   where show = showError
@@ -229,6 +233,16 @@ parseTFun = do
             args <- bracketed $ sepBy parseTerm paddedComma
             return $ TFun name args (length args) 
 
+parseTStr :: Parser Term
+parseTStr = do
+        _ <- char '"'
+        x <- many $ noneOf "\""
+        _ <- char '"'
+        return $ TStr x
+
+parseTNum :: Parser Term
+parseTNum = liftM (TNum . read) (many1 digit)
+        
 readVar :: Parser Name
 readVar = do
             frst <- letter
@@ -241,10 +255,11 @@ symbol = oneOf "'._"
 paddedComma :: Parser ()
 paddedComma = paddedChar ','
 
-
 parseTerm :: Parser Term
 parseTerm =  try parseTFun
+         <|> parseTNum
          <|> parseTVar
+         <|> parseTStr
 
 parseProcess :: Parser PiProcess
 parseProcess = liftM (foldr1 Conc) $ sepBy parseProcess' (paddedChar '|')
@@ -283,6 +298,11 @@ coreBindings = do
 
 stdStrChan :: Handle -> Channel
 stdStrChan h = Channel h "string" show undefined
+
+fileChan :: FilePath -> IOThrowsError Channel
+fileChan file = do
+                han <- liftIO $ openFile file ReadWriteMode
+                return $ Channel han "string" show undefined 
 
 nativeChannels :: [(String   , Channel)]
 nativeChannels = [ ("stdin"  , stdStrChan stdin) 
@@ -381,6 +401,8 @@ evalTerm env (TVar name) = do
             case var of
                 Term term -> return term
                 _         -> throwE $ NotTerm name var  
+evalTerm env (TNum num) = return $ TNum num
+evalTerm env (TStr str) = return $ TStr str
 evalTerm env (TFun name args _) = do
             fun <- getVar env name
             argVals <- mapM (evalTerm env) args
@@ -394,26 +416,24 @@ liftThrows :: ThrowsError a -> IOThrowsError a
 liftThrows (Left err)  = throwE err
 liftThrows (Right val) = return val
 
-extractValue :: ThrowsError a -> a
+extractValue :: ThrowsError a -> a 
 extractValue (Right v) = v
 extractValue (Left  e) = error $ show e
 
 eval :: Env -> PiProcess -> IOThrowsError () 
-eval _ Null        = liftIO $ do
+eval _ Null        = liftIO $ --do
                         putStrLn "Stopping Process..."
-                        myThreadId >>= killThread
+                        --myThreadId >>= killThread
 eval env (In a (TVar name))  = do
-                    aVal <- evalTerm env a
-                    chan <- getChannel env aVal
+                    chan <- evalChan env a
                     received <- receiveIn chan
                     _ <- defineVar env name received 
-                    liftIO $ putStrLn $ "Receiving " ++ show received ++ " On " ++ show aVal
+                    liftIO $ putStrLn $ "Receiving " ++ show received ++ " On " ++ show a
 eval env (Out a b) = do 
-                    aVal <- evalTerm env a
+                    chan <- evalChan env a
                     bVal <- evalTerm env b
-                    chan <- getChannel env aVal
                     sendOut chan (Term bVal)
-                    liftIO $ putStrLn $ "Sending " ++ show bVal ++ " On " ++ show aVal
+                    liftIO $ putStrLn $ "Sending " ++ show bVal ++ " On " ++ show a
 eval env (Replicate proc) = liftIO (threadDelay 1000000) >> eval env (proc `Conc` Replicate proc)
 eval env (p1 `Conc` p2)   = do
                     _ <- liftIO $ forkIO $ do {_ <- runExceptT $ eval env p1; return ()} -- there must be a better way
@@ -475,13 +495,14 @@ sendOut chan val = liftIO $ hPutStr (handle chan) $ serialize chan val
 receiveIn :: Channel -> IOThrowsError Value
 receiveIn chan = liftIO $ liftM (deserialize chan) $ hGetContents (handle chan)
 
-getChannel :: Env -> Term -> IOThrowsError Channel
-getChannel env (TVar name) = do
+evalChan :: Env -> Term -> IOThrowsError Channel
+evalChan env (TVar name) = do
             val <- getVar env name
             case val of
                 Chan c -> return c
                 _      -> throwE $ NotChannel name
-getChannel _ (TFun{}) = undefined
+evalChan env (TFun "file" [TStr str] 1) = fileChan str
+evalChan env (TFun "http" [TStr _] 1) = throwE $ Default "http undefined"
 
 teststr :: String
 teststr = "new c; new xpk; new sks; in(c,xpk);new k ; out(c, aenc(xpk, sign(sks,k))); let z = senc(k,pair(true(),false())) in if fst(sdec(k, z)) == true() then 0 else 0"
