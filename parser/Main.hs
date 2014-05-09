@@ -10,7 +10,7 @@ import Control.Monad.Trans.Except (ExceptT(..), catchE, runExceptT, throwE)
 import Data.IORef (IORef, newIORef, readIORef,writeIORef)
 import Data.List (intercalate)
 import Data.Maybe (isJust)
-import System.Environment (getArgs)
+import System.Environment (getArgs, getProgName)
 import System.IO (Handle, IOMode(..), hFlush, hGetLine, hPutStrLn,openFile, stderr, stdin, stdout)
 import Text.ParserCombinators.Parsec
 
@@ -380,15 +380,15 @@ checksign e = throwError $ TypeMismatch "(pk(var),sign(var,var))" $ map Term e
 
 main :: IO ()
 main = do
+        name <- getProgName
         args <- getArgs
         case args of
             []  -> runRepl
             [x] -> runProcess x
             _   -> do
                     putStrLn "Use:"
-                    putStrLn "phi  -- Enter the REPL"
-                    putStrLn "phi [process] -- Run single process"
-                            
+                    putStrLn $ name ++ " -- Enter the REPL"
+                    putStrLn $ name ++ " [process] -- Run single process"
         
 readProgram :: String ->  ThrowsError PiProcess
 readProgram input = case parse parseProcess "pi-calculus" input of
