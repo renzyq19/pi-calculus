@@ -502,7 +502,7 @@ sendOut chan val = liftIO $ hPutStrLn (handle chan) $ serialize chan val
 receiveIn :: Channel -> IOThrowsError Value
 receiveIn chan = do 
             message <- liftIO $ hGetLine $ handle chan 
-            deserialize chan message
+            (deserialize chan) message
 
 evalChan :: Env -> Term -> IOThrowsError Channel
 evalChan env (TVar name) = do
