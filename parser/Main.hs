@@ -471,6 +471,10 @@ eval env (Let (TVar name) t2 (Just p)) = do
             val <- evalTerm env t2 
             newEnv <- liftIO $ bindVars env [(name,val)]
             eval newEnv p
+eval env (Let (TVar name) t2 Nothing) = do
+            val <- evalTerm env t2
+            _ <- defineVar env name val
+            return ()
 eval env (Let (TFun name args _) t2 p) = undefined
 eval _ _ = throwE $ Default "undefined action"
 
