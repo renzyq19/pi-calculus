@@ -24,7 +24,7 @@ data PiProcess = Null
                | PiProcess `Seq`   PiProcess -- Sequential Composition
                | PiProcess `Conc`  PiProcess -- Parallel   Composition
                | Replicate PiProcess         -- Infinite parallel replication
-               | Let Term Term PiProcess
+               | Let Term Term (Maybe PiProcess)
                | If Condition PiProcess PiProcess
                  deriving (Eq)
 
@@ -223,8 +223,10 @@ parseLet = do
             name <- parseTerm
             paddedChar '='
             term <- parseTerm
-            paddedStr "in"
-            p    <- parseProcess
+            p <- try (do 
+                paddedStr "in"
+                proc <- parseProcess
+                return $ Just proc) <|> return Nothing
             return $ Let name term p
 
 parseCondition :: Parser Condition
@@ -273,7 +275,7 @@ parseTerm =  try parseTFun
          <|> parseTStr
 
 parseProcess :: Parser PiProcess
-parseProcess = liftM (foldr1 Conc) $ sepBy parseProcess' (paddedChar '|')
+parseProcess = liftM (fold Conc) $ sepBy parseProcess' (paddedChar '|')
     where
     parseProcess'  = bracketed parseProcess'' <|> parseProcess''
     parseProcess'' = parseNull 
@@ -283,6 +285,8 @@ parseProcess = liftM (foldr1 Conc) $ sepBy parseProcess' (paddedChar '|')
                  <|> parseReplicate
                  <|> parseNew
                  <|> parseLet
+    fold _ [] = Null
+    fold f xs = foldr1 f xs
 
 bracketed :: Parser a -> Parser a
 bracketed parser = do
@@ -463,12 +467,13 @@ eval env (New var@(TVar name))       = do
 eval env (If b p1 p2)     = do
             cond <- evalCond env b
             eval env (if cond then p1 else p2)
-eval env (Let (TVar name) t2 p) = do
-            term <- evalTerm env t2 
-            _ <- defineVar env name term
-            eval env p
+eval env (Let (TVar name) t2 (Just p)) = do
+            val <- evalTerm env t2 
+            newEnv <- liftIO $ bindVars env [(name,val)]
+            eval newEnv p
 eval env (Let (TFun name args _) t2 p) = undefined
 eval _ _ = throwE $ Default "undefined action"
+
 
 evalString :: Env -> String -> IO String
 evalString env expr = runIOThrows $ liftM show $ liftThrows (readProgram expr) >>= eval env
