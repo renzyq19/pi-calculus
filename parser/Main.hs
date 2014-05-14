@@ -101,6 +101,13 @@ showValue (Chan c)  = chanType c
 showValue (PrimitiveFunc _)  = "<primitive>" 
 showValue (Func {})          = "<user function>"  
 
+eqvVal :: Value -> Value -> Bool
+eqvVal (Proc p1)  (Proc p2) = p1 == p2
+eqvVal (Term t1)  (Term t2) = t1 == t2
+eqvVal _ _ = False
+
+instance Eq Value where (==) = eqvVal
+
 showPi :: PiProcess -> String
 showPi Null = "0"
 showPi (In c m) =  "in(" ++ show c ++ "," ++ show m ++ ")"
@@ -403,26 +410,27 @@ readProgram input = case parse parseProcess "pi-calculus" input of
 evalCond :: Env -> Condition -> IOThrowsError Bool
 evalCond env (t1 `Equals` t2) = liftM2 (==) (evalTerm env t1) (evalTerm env t2)
 
-evalTerm :: Env -> Term -> IOThrowsError Term
-evalTerm env (TVar name) = do
-            var <- getVar env name
-            case var of
-                Term term -> return term
-                _         -> throwE $ NotTerm name var  
-evalTerm _ (TNum num) = return $ TNum num
-evalTerm _ (TStr str) = return $ TStr str
+evalTerm :: Env -> Term -> IOThrowsError Value
+evalTerm env (TVar name) = getVar env name
+evalTerm _ (TNum num) = return $ Term $ TNum num
+evalTerm _ (TStr str) = return $ Term $ TStr str
+evalTerm _ (TFun "file" [TStr str] 1) = liftM Chan $ fileChan str
+evalTerm _ (TFun "http" [_] 1) = throwE $ Default "http channels undefined"
 evalTerm env (TFun name args _) = do
             fun <- getVar env name
             argVals <- mapM (evalTerm env) args
             apply fun argVals
 
-apply :: Value -> [Term] -> IOThrowsError Term 
-apply (PrimitiveFunc fun) args = liftThrows $ fun args
+apply :: Value -> [Value] -> IOThrowsError Value 
+apply (PrimitiveFunc fun) args = liftM Term $  liftThrows $ fun $ map isTerm args
+        where
+            isTerm (Term a) = a
+            isTerm _        = TVar "dummy"  
+apply (Func {})   _   = undefined
 apply e args          = throwE $ NotFunction  ("Found " ++ show e) $ show args
 
 liftThrows :: ThrowsError a -> IOThrowsError a
-liftThrows (Left err)  = throwE err
-liftThrows (Right val) = return val
+liftThrows = either throwE return 
 
 extractValue :: ThrowsError a -> a 
 extractValue (Right v) = v
@@ -432,7 +440,6 @@ eval :: Env -> PiProcess -> IOThrowsError ()
 eval _ Null        = liftIO $ do
                         threadId <- myThreadId
                         putStrLn $ "Stopping Process : " ++ show threadId
-                        --myThreadId >>= killThread
 eval env (In a (TVar name))  = do
                     chan <- evalChan env a
                     received <- receiveIn chan
@@ -441,7 +448,7 @@ eval env (In a (TVar name))  = do
 eval env (Out a b) = do 
                     chan <- evalChan env a
                     bVal <- evalTerm env b
-                    sendOut chan (Term bVal)
+                    sendOut chan bVal
                     liftIO $ putStrLn $ "Sending " ++ show bVal ++ " On " ++ show a
 eval env (Replicate proc) = liftIO (threadDelay 1000000) >> eval env (proc `Conc` Replicate proc)
 eval env (p1 `Conc` p2)   = do
@@ -458,7 +465,7 @@ eval env (If b p1 p2)     = do
             eval env (if cond then p1 else p2)
 eval env (Let (TVar name) t2 p) = do
             term <- evalTerm env t2 
-            _ <- defineVar env name $ Term term
+            _ <- defineVar env name term
             eval env p
 eval env (Let (TFun name args _) t2 p) = undefined
 eval _ _ = throwE $ Default "undefined action"
@@ -509,13 +516,8 @@ receiveIn chan = do
             deserialize chan message
 
 evalChan :: Env -> Term -> IOThrowsError Channel
-evalChan env (TVar name) = do
-            val <- getVar env name
-            case val of
+evalChan env t = do
+            chan <- evalTerm env t
+            case chan of
                 Chan c -> return c
-                _      -> throwE $ NotChannel name
-evalChan _   (TFun "file" [TStr str] 1) = fileChan str
-evalChan _   (TFun "http" [_] 1) = throwE $ Default "http channels undefined"
-evalChan env (TNum num) = evalChan env $ TVar . show $ num
-evalChan _   (TStr str) = throwE $ NotChannel str
-evalChan _ _ = throwE $ Default "undefined channel"
+                _      -> throwE $ NotChannel $ show t
