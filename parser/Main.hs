@@ -14,6 +14,9 @@ import System.Environment (getArgs, getProgName)
 import System.IO (Handle, IOMode(..), hFlush, hGetLine, hPutStrLn,openFile, stderr, stdin, stdout)
 import Text.ParserCombinators.Parsec
 
+import Data.Map (Map)
+import qualified Data.Map as Map
+
 data PiProcess = Null
                | In   Term Term
                | Out  Term Term
@@ -60,25 +63,25 @@ type Name      = String
 type Type      = String
 data Condition = Term `Equals` Term deriving (Eq)
 
-type Env = IORef [(String , IORef Value)]
+type Env = IORef (Map String Value)
 
 nullEnv :: IO Env
-nullEnv = newIORef []
+nullEnv = newIORef Map.empty
 
 isBound :: Env -> String -> IO Bool
-isBound envRef var = liftM (isJust . lookup var) $ readIORef envRef
+isBound envRef var = liftM (isJust . Map.lookup var) $ readIORef envRef
 
 getVar :: Env -> String -> IOThrowsError Value 
 getVar envRef var = do env <- liftIO $ readIORef envRef
                        maybe (throwE $ UnboundVar "Getting an unbound variable" var)
-                             (liftIO . readIORef)
-                             (lookup var env)
+                             return
+                             (Map.lookup var env)
 
 setVar :: Env -> String -> Value -> IOThrowsError Value
 setVar envRef var val = do env <- liftIO $ readIORef envRef
                            maybe (throwE $ UnboundVar "Setting an unbound variable" var)
-                                 (liftIO . flip writeIORef val)
-                                 (lookup var env)
+                                 (return $ liftIO $ writeIORef envRef $ Map.insert var val env)
+                                 (Map.lookup var env)
                            return val
                            
 defineVar :: Env -> String -> Value -> IOThrowsError Value
@@ -87,9 +90,8 @@ defineVar envRef var val = do
     if alreadyDefined
         then setVar envRef var val >> return val
         else liftIO $ do
-            valueRef <- newIORef val
             env      <- readIORef envRef
-            writeIORef envRef ((var,valueRef):env)
+            writeIORef envRef $ Map.insert var val env
             return val
 
 showValue :: Value -> String
@@ -287,10 +289,9 @@ bracketed parser = do
 type TermFun = [Term] -> ThrowsError Term
 
 bindVars :: Env -> [(String , Value)] -> IO Env
-bindVars envRef bindings = readIORef envRef >>= extendEnv bindings >>= newIORef
-    where
-        extendEnv bs env     = liftM (++ env) (mapM addBinding bs)
-        addBinding (var,val) = liftM (var,) $ newIORef val
+bindVars envRef bindings = do
+                env <- readIORef envRef
+                newIORef $ Map.union (Map.fromList bindings) env
 
 coreBindings :: IO Env
 coreBindings = do
