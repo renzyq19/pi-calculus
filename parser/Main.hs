@@ -34,7 +34,8 @@ data Term = TVar Name
 data Value = Proc PiProcess 
            | Term Term
            | Chan Channel
-           | Func TermFun
+           | PrimitiveFunc TermFun
+           | Func {params :: [String] , body :: PiProcess, closure :: Env}
 
 data PiError = NumArgs Name Integer [Term]
              | TypeMismatch String [Value]
@@ -95,7 +96,8 @@ showValue :: Value -> String
 showValue (Proc p)  = show p
 showValue (Term t)  = show t
 showValue (Chan c)  = chanType c
-showValue (Func _)  = "Function" 
+showValue (PrimitiveFunc _)  = "<primitive>" 
+showValue (Func {})          = "<user function>"  
 
 showPi :: PiProcess -> String
 showPi Null = "0"
@@ -293,7 +295,7 @@ bindVars envRef bindings = readIORef envRef >>= extendEnv bindings >>= newIORef
 coreBindings :: IO Env
 coreBindings = do
                 n <- nullEnv 
-                e1   <- bindVars n (map (second Func) primitives) 
+                e1   <- bindVars n (map (second PrimitiveFunc) primitives) 
                 bindVars e1 (map (second Chan) nativeChannels)
 
 stdStrChan :: Handle -> Channel
@@ -414,7 +416,7 @@ evalTerm env (TFun name args _) = do
             apply fun argVals
 
 apply :: Value -> [Term] -> IOThrowsError Term 
-apply (Func fun) args = liftThrows $ fun args
+apply (PrimitiveFunc fun) args = liftThrows $ fun args
 apply e args          = throwE $ NotFunction  ("Found " ++ show e) $ show args
 
 liftThrows :: ThrowsError a -> IOThrowsError a
@@ -457,6 +459,7 @@ eval env (Let (TVar name) t2 p) = do
             term <- evalTerm env t2 
             _ <- defineVar env name $ Term term
             eval env p
+eval env (Let (TFun name args _) t2 p) = undefined
 eval _ _ = throwE $ Default "undefined action"
 
 evalString :: Env -> String -> IO String
@@ -502,7 +505,7 @@ sendOut chan val = liftIO $ hPutStrLn (handle chan) $ serialize chan val
 receiveIn :: Channel -> IOThrowsError Value
 receiveIn chan = do 
             message <- liftIO $ hGetLine $ handle chan 
-            (deserialize chan) message
+            deserialize chan message
 
 evalChan :: Env -> Term -> IOThrowsError Channel
 evalChan env (TVar name) = do
