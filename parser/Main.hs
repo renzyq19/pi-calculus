@@ -125,7 +125,6 @@ showTerm :: Term -> String
 showTerm (TVar x)   = x
 showTerm (TStr str) = str
 showTerm (TNum num) = show num
-showTerm (TFun n [] 0 ) = n ++ "()"
 showTerm (TFun n ts _ ) = n ++ "(" ++ intercalate "," (map show ts) ++ ")"
 
 showCond :: Condition -> String
@@ -398,9 +397,10 @@ main :: IO ()
 main = do
         name <- getProgName
         args <- getArgs
+        pilude <- readFile "pilude.pi"
         case args of
-            []  -> runRepl
-            [x] -> runProcess x
+            []  -> runRepl coreBindings
+            [x] -> runProcess coreBindings x
             _   -> do
                     putStrLn "Use:"
                     putStrLn $ name ++ " -- Enter the REPL"
@@ -419,6 +419,7 @@ evalTerm env (TVar name) = getVar env name
 evalTerm _   (TNum num) = return $ Term $ TNum num
 evalTerm _   (TStr str) = return $ Term $ TStr str
 evalTerm _   (TFun "file" [TStr str] 1) = liftM Chan $ fileChan str
+evalTerm _   (TFun "dummy" [] 0) = undefined
 evalTerm _   (TFun "http" [_] 1) = throwE $ Default "http channels undefined"
 evalTerm env (TFun name args _) = do
             fun <- getVar env name
@@ -494,19 +495,19 @@ eval env (Let (TVar name) (Term t2) Nothing) = do
                 val <- evalTerm env t2
                 _ <- defineVar env name val
                 return ()
-eval env (Let (TFun name args _) (Term t2) (Just p)) = 
+eval env (Let (TFun name args _) t2 (Just p)) = 
             defineLocalFun env name args t2 p
-eval env (Let (TFun name args _) (Term t2) Nothing)  = 
+eval env (Let (TFun name args _) t2 Nothing)  = 
             defineGlobalFun env name args t2
 eval _ _ = throwE $ Default "undefined action"
 
-defineGlobalFun :: Env -> String -> [Term] -> Term -> IOThrowsError ()
+defineGlobalFun :: Env -> String -> [Term] -> Value -> IOThrowsError ()
 defineGlobalFun env name args term = do
-            _ <- defineVar env name $ makeFun args (Term term) env
+            _ <- defineVar env name $ makeFun args term env
             return ()
-defineLocalFun :: Env -> String -> [Term] -> Term -> PiProcess -> IOThrowsError ()
+defineLocalFun :: Env -> String -> [Term] -> Value -> PiProcess -> IOThrowsError ()
 defineLocalFun env name args term p = do
-            clos <- liftIO $ bindVars env [(name, makeFun args (Term term) env)]
+            clos <- liftIO $ bindVars env [(name, makeFun args term env)]
             eval clos p
 
 
@@ -532,11 +533,11 @@ evalAndPrint :: Env -> String -> IO ()
 evalAndPrint _   []   = return () 
 evalAndPrint env expr = evalString env expr >>= putStrLn
 
-runProcess :: String -> IO ()
-runProcess expr = coreBindings >>= flip evalAndPrint expr
+runProcess :: IO Env -> String -> IO ()
+runProcess core expr = core >>= flip evalAndPrint expr
 
-runRepl :: IO ()
-runRepl = coreBindings >>= until_ quit (readPrompt "phi >> ") . evalAndPrint
+runRepl :: IO Env -> IO ()
+runRepl core = core >>= until_ quit (readPrompt "phi >> ") . evalAndPrint
         where
             quit = flip any [":quit",":q"] . (==)
 
