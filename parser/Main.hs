@@ -3,6 +3,7 @@ module Main where
 
 import Control.Arrow (second)
 import Control.Concurrent (forkIO, myThreadId, threadDelay)
+import qualified Control.Concurrent.Chan as Chans
 import Control.Monad (liftM, liftM2, unless)
 import Control.Monad.Error (throwError)
 import Control.Monad.Trans (liftIO)
@@ -11,7 +12,7 @@ import Data.IORef (IORef, newIORef, readIORef,writeIORef)
 import Data.List (intercalate)
 import Data.Maybe (isJust)
 import System.Environment (getArgs, getProgName)
-import System.IO (Handle, IOMode(..), hFlush, hGetLine, hPutStrLn,openFile, stderr, stdin, stdout)
+import System.IO (Handle, hFlush, hGetLine, hPrint, stderr, stdin, stdout)
 import Text.ParserCombinators.Parsec
 
 import Data.Map (Map)
@@ -31,6 +32,8 @@ data PiProcess = Null
 data Term = TVar Name 
           | TStr String
           | TNum Integer
+          | TBool Bool
+          | TPair (Term, Term)
           | TFun Name [Term] Int
             deriving (Eq)
 
@@ -50,10 +53,11 @@ data PiError = NumArgs Name Integer [Value]
              | Default String
 
 data Channel = Channel { 
-               handle      :: Handle
+               ch          :: Chans.Chan Value
+             , handle      :: Handle
              , chanType    :: Type
-             , serialize   :: Value  -> String
-             , deserialize :: String -> IOThrowsError Value
+             , send        :: Channel -> Value -> IO ()
+             , receive     :: Channel -> IO Value
              }
 
 type IOThrowsError = ExceptT PiError IO 
@@ -125,6 +129,8 @@ showTerm :: Term -> String
 showTerm (TVar x)   = x
 showTerm (TStr str) = str
 showTerm (TNum num) = show num
+showTerm (TBool b ) = if b then "true()" else "false()"
+showTerm (TPair (a,b)) = "pair("++ show a ++ ","++ show b ++ ")"
 showTerm (TFun n ts _ ) = n ++ "(" ++ intercalate "," (map show ts) ++ ")"
 
 showCond :: Condition -> String
@@ -306,18 +312,19 @@ bindVars envRef bindings = do
 coreBindings :: IO Env
 coreBindings = do
                 n <- nullEnv 
-                e1   <- bindVars n (map (second PrimitiveFunc) primitives) 
+                e1 <- bindVars n (map (second PrimitiveFunc) primitives) 
                 bindVars e1 (map (second Chan) nativeChannels)
 
 stdStrChan :: Handle -> Channel
-stdStrChan h = Channel h "string" show dSer
+stdStrChan h = Channel dummyChan h "string" write rd
     where
-        dSer str = liftM Term $ liftThrows $ readTerm str 
+        write chan = hPrint (handle chan)
+        rd  chan = do 
+            msg <- hGetLine (handle chan)
+            return $ Term $ extractValue $ readTerm msg
 
-fileChan :: FilePath -> IOThrowsError Channel
-fileChan file = do
-                han <- liftIO $ openFile file ReadWriteMode
-                return $ Channel han "string" show undefined 
+dummyChan :: Chans.Chan a
+dummyChan = error "If this has happened, it is an error in my programming"
 
 nativeChannels :: [(String   , Channel)]
 nativeChannels = [ ("stdin"  , stdStrChan stdin) 
@@ -329,8 +336,8 @@ nativeChannels = [ ("stdin"  , stdStrChan stdin)
                  ]
 
 primitives :: [(String      , TermFun)]
-primitives = [ ("true"      , constId "true")
-             , ("false"     , constId "false")
+primitives = [ ("true"      , true)
+             , ("false"     , false)
              , ("fst"       , first)
              , ("snd"       , secnd)
              , ("hash"      , unaryId "hash")
@@ -346,6 +353,14 @@ primitives = [ ("true"      , constId "true")
              , ("checksign" , checksign)
              , ("mac"       , binaryId "mac")
              ]
+
+true :: TermFun 
+true [] = return $ TBool True
+true e  = throwError $ NumArgs "true" 0 (map Term e)
+
+false :: TermFun
+false [] = return $ TBool False
+false e = throwError $ NumArgs "false" 0 (map Term e)
 
 constId :: String -> TermFun
 constId name [] = return $ TFun name [] 0
@@ -389,8 +404,8 @@ adec e = throwError $ TypeMismatch "(var,aenc(pk(var),var))" $ map Term e
 
 checksign :: TermFun
 checksign [TFun "pk" [k1] 1 , TFun "sign" [k2,_] 2 ]
-    | k1 == k2  = constId "true"  [] 
-    | otherwise = constId "false" []
+    | k1 == k2  = true []
+    | otherwise = false [] 
 checksign e = throwError $ TypeMismatch "(pk(var),sign(var,var))" $ map Term e
 
 main :: IO ()
@@ -418,9 +433,14 @@ evalTerm :: Env -> Term -> IOThrowsError Value
 evalTerm env (TVar name) = getVar env name
 evalTerm _   (TNum num) = return $ Term $ TNum num
 evalTerm _   (TStr str) = return $ Term $ TStr str
-evalTerm _   (TFun "file" [TStr str] 1) = liftM Chan $ fileChan str
-evalTerm _   (TFun "dummy" [] 0) = undefined
-evalTerm _   (TFun "http" [_] 1) = throwE $ Default "http channels undefined"
+evalTerm _   (TBool b ) = return $ Term $ TBool b
+evalTerm _   (TFun "fileChan" [TStr _] 1) = throwE $ Default "fileChans incomplete"
+evalTerm _   (TFun "dummy" [] 0) = do
+            c <- liftIO Chans.newChan
+            let write = Chans.writeChan . ch
+            let rd  = Chans.readChan . ch 
+            return $ Chan $ Channel c stdout "" write rd
+evalTerm _   (TFun "httpChan" [_] 1) = throwE $ Default "http channels undefined"
 evalTerm env (TFun name args _) = do
             fun <- getVar env name
             argVals <- mapM (evalTerm env) args
@@ -553,12 +573,10 @@ flushStr :: String -> IO ()
 flushStr str = putStr str >> hFlush stdout
 
 sendOut :: Channel -> Value -> IOThrowsError () 
-sendOut chan val = liftIO $ hPutStrLn (handle chan) $ serialize chan val 
+sendOut chan val = liftIO $ send chan chan val
 
 receiveIn :: Channel -> IOThrowsError Value
-receiveIn chan = do 
-            message <- liftIO $ hGetLine $ handle chan 
-            deserialize chan message
+receiveIn chan = liftIO $  receive chan chan
 
 evalChan :: Env -> Term -> IOThrowsError Channel
 evalChan env t = do
