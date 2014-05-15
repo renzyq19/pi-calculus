@@ -1,5 +1,5 @@
 {-# LANGUAGE TupleSections #-}
-module PiCalculus where
+module Main where
 
 import Control.Arrow (second)
 import Control.Concurrent (forkIO, myThreadId, threadDelay)
@@ -8,6 +8,7 @@ import Control.Monad (liftM, liftM2, unless)
 import Control.Monad.Error (throwError)
 import Control.Monad.Trans (liftIO)
 import Control.Monad.Trans.Except (ExceptT(..), catchE, runExceptT, throwE)
+import Data.Char (toLower)
 import Data.IORef (IORef, newIORef, readIORef,writeIORef)
 import Data.List (intercalate)
 import Data.Maybe (isJust)
@@ -129,7 +130,7 @@ showTerm :: Term -> String
 showTerm (TVar x)   = x
 showTerm (TStr str) = str
 showTerm (TNum num) = show num
-showTerm (TBool b ) = if b then "true()" else "false()"
+showTerm (TBool b ) = map toLower $ show b
 showTerm (TPair (a,b)) = "pair("++ show a ++ ","++ show b ++ ")"
 showTerm (TFun n ts _ ) = n ++ "(" ++ intercalate "," (map show ts) ++ ")"
 
@@ -242,14 +243,21 @@ parseCondition = do
             return $ t1 `Equals` t2
 
 parseTVar :: Parser Term
-parseTVar = liftM TVar readVar 
+parseTVar = do
+        v <- readVar
+        return $ case v of
+            "true"  -> TBool True
+            "false" -> TBool False
+            _       -> TVar v
 
 parseTFun :: Parser Term
 parseTFun = do
             name <- readVar
             spaces
             args <- bracketed $ sepBy parseTerm paddedComma
-            return $ TFun name args (length args) 
+            return $ case (name,args) of
+                ("pair", t1:t2:_)  -> TPair  (t1,t2)
+                _                  -> TFun name args (length args) 
 
 parseTStr :: Parser Term
 parseTStr = do
@@ -336,13 +344,10 @@ nativeChannels = [ ("stdin"  , stdStrChan stdin)
                  ]
 
 primitives :: [(String      , TermFun)]
-primitives = [ ("true"      , true)
-             , ("false"     , false)
-             , ("fst"       , first)
+primitives = [ ("fst"       , first)
              , ("snd"       , secnd)
              , ("hash"      , unaryId "hash")
              , ("pk"        , unaryId "pk")
-             , ("http"      , http)
              , ("getmsg"    , getmsg)
              , ("pair"      , binaryId "pair")
              , ("sdec"      , sdec)
@@ -354,13 +359,11 @@ primitives = [ ("true"      , true)
              , ("mac"       , binaryId "mac")
              ]
 
-true :: TermFun 
-true [] = return $ TBool True
-true e  = throwError $ NumArgs "true" 0 (map Term e)
+true :: Term
+true = TBool True
 
-false :: TermFun
-false [] = return $ TBool False
-false e = throwError $ NumArgs "false" 0 (map Term e)
+false :: Term
+false = TBool False
 
 constId :: String -> TermFun
 constId name [] = return $ TFun name [] 0
@@ -379,16 +382,12 @@ getmsg [TFun "sign" [_,y] 2] = return y
 getmsg e = throwError $ TypeMismatch "sign" $ map Term e
 
 first :: TermFun
-first [TFun "pair" [x, _] 2] = return x
+first [TPair p] = return $ fst p
 first e = throwError $ TypeMismatch "pair" $ map Term e 
 
 secnd :: TermFun
-secnd [TFun "pair" [_,y] 2] = return y
+secnd [TPair p] = return $ snd p
 secnd e = throwError $ TypeMismatch "pair" $ map Term e 
-
-http :: TermFun
-http [TVar _] = undefined
-http _        = undefined
 
 sdec :: TermFun
 sdec [k1, TFun "senc" [k2,y] 2]
@@ -403,9 +402,7 @@ adec [x , TFun "aenc" [TFun "pk" [k] 1, y ] 2]
 adec e = throwError $ TypeMismatch "(var,aenc(pk(var),var))" $ map Term e
 
 checksign :: TermFun
-checksign [TFun "pk" [k1] 1 , TFun "sign" [k2,_] 2 ]
-    | k1 == k2  = true []
-    | otherwise = false [] 
+checksign [TFun "pk" [k1] 1 , TFun "sign" [k2,_] 2 ] = return $ TBool (k1 == k2)
 checksign e = throwError $ TypeMismatch "(pk(var),sign(var,var))" $ map Term e
 
 main :: IO ()
@@ -434,6 +431,12 @@ evalTerm env (TVar name) = getVar env name
 evalTerm _   (TNum num) = return $ Term $ TNum num
 evalTerm _   (TStr str) = return $ Term $ TStr str
 evalTerm _   (TBool b ) = return $ Term $ TBool b
+evalTerm env (TPair (t1,t2)) = do
+            a <- evalTerm env t1
+            b <- evalTerm env t2
+            case (a,b) of 
+                (Term c, Term d) -> return $ Term $ TPair (c,d)
+                _                -> throwE $ Default "pair not given two terms"
 evalTerm _   (TFun "fileChan" [TStr _] 1) = throwE $ Default "fileChans incomplete"
 evalTerm _   (TFun "dummy" [] 0) = do
             c <- liftIO Chans.newChan
