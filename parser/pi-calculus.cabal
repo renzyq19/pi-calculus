@@ -17,4 +17,4 @@ cabal-version:       >=1.8
 executable pi-calculus
   main-is:           PiCalculus.hs
   -- other-modules:       
-  build-depends:       base ==4.6.*, mtl ==2.2.*, parsec ==3.1.*, containers ==0.5.*, transformers ==0.4.*, network ==2.5.*
+  build-depends:       base >=4.6, mtl ==2.2.*, parsec ==3.1.*, containers ==0.5.*, transformers ==0.4.*, network ==2.5.*
