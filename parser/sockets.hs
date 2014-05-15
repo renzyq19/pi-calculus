@@ -1,38 +1,14 @@
-import Control.Monad (forever,unless)
-import Control.Concurrent (forkIO)
-import Control.Monad.IO.Class (liftIO)
-import qualified Data.Text as T
-import qualified Data.Text.IO as T
-import qualified Network.WebSockets as WS
-
--- SERVER Process Code
-server :: IO ()
-server = do
-    WS.runServer "0.0.0.0" 9000 $ pong
-
-pong :: WS.ServerApp
-pong pending = do
-    conn <- WS.acceptRequest pending
-    forever $ do 
-        msg <- WS.receiveData conn
-        WS.sendTextData conn (msg :: T.Text)
-
--- CLIENT Process Code
-client :: IO ()
-client = WS.runClient "0.0.0.0" 9000 "/" ping
-
-ping :: WS.ClientApp ()
-ping conn = do
-    _ <- forkIO $ forever $ do
-        msg <- WS.receiveData conn
-        liftIO $ T.putStrLn msg
-    let loop = do
-            line <- T.getLine
-            unless (T.null line) $WS.sendTextData conn line
-            loop
-    loop
+import Network
+import System.IO
+import Control.Concurrent
 
 main :: IO ()
-main = do
-    _ <- forkIO $ server
-    client
+main = withSocketsDo $ do
+    forkIO $ do s1 <- connectTo "localhost" $ PortNumber 9000
+                hPutStrLn s1 "hello"
+    s2 <- listenOn $ PortNumber 9000
+    (h,_,_) <- accept s2
+    str <- hGetLine h
+    putStrLn str
+
+

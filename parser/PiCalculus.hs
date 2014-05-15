@@ -12,6 +12,7 @@ import Data.Char (toLower)
 import Data.IORef (IORef, newIORef, readIORef,writeIORef)
 import Data.List (intercalate)
 import Data.Maybe (isJust)
+import Network.Socket ()
 import System.Environment (getArgs, getProgName)
 import System.IO (Handle, hFlush, hGetLine, hPrint, stderr, stdin, stdout)
 import Text.ParserCombinators.Parsec
