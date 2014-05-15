@@ -24,7 +24,7 @@ data PiProcess = Null
                | PiProcess `Seq`   PiProcess -- Sequential Composition
                | PiProcess `Conc`  PiProcess -- Parallel   Composition
                | Replicate PiProcess         -- Infinite parallel replication
-               | Let Term Term (Maybe PiProcess)
+               | Let Term Value (Maybe PiProcess)
                | If Condition PiProcess PiProcess
                  deriving (Eq)
 
@@ -38,9 +38,9 @@ data Value = Proc PiProcess
            | Term Term
            | Chan Channel
            | PrimitiveFunc TermFun
-           | Func {params :: [String] , body :: PiProcess, closure :: Env}
+           | Func {params :: [String] , body :: Value, closure :: Env}
 
-data PiError = NumArgs Name Integer [Term]
+data PiError = NumArgs Name Integer [Value]
              | TypeMismatch String [Value]
              | Parser ParseError
              | UnboundVar String String
@@ -149,7 +149,7 @@ instance Show Condition where show = showCond
 instance Show Value     where show = showValue
 instance Show PiError   where show = showError
 
-unwordsList :: [Term] -> String
+unwordsList :: [Value] -> String
 unwordsList = unwords . map show
 
 parseNull :: Parser PiProcess
@@ -222,12 +222,12 @@ parseLet = do
             spaces
             name <- parseTerm
             paddedChar '='
-            term <- parseTerm
+            val <- liftM Term parseTerm <|> liftM Proc parseProcess
             p <- try (do 
                 paddedStr "in"
                 proc <- parseProcess
                 return $ Just proc) <|> return Nothing
-            return $ Let name term p
+            return $ Let name val p
 
 parseCondition :: Parser Condition
 parseCondition = do
@@ -258,9 +258,9 @@ parseTNum = liftM (TNum . read) (many1 digit)
         
 readVar :: Parser Name
 readVar = do
-            frst <- letter
-            rest <- many $ letter <|> digit <|> symbol
-            return $ frst:rest
+        frst <- letter
+        rest <- many $ letter <|> digit <|> symbol
+        return $ frst:rest
 
 symbol :: Parser Char
 symbol = oneOf "'._"
@@ -350,15 +350,15 @@ primitives = [ ("true"      , constId "true")
 
 constId :: String -> TermFun
 constId name [] = return $ TFun name [] 0
-constId name e  = throwError $ NumArgs name 0 e
+constId name e  = throwError $ NumArgs name 0 (map Term e)
 
 unaryId :: String -> TermFun
 unaryId name [x] =  return $ TFun name [x] 1
-unaryId name e  = throwError $ NumArgs name 1 e
+unaryId name e  = throwError $ NumArgs name 1 (map Term e)
 
 binaryId :: String ->  TermFun
 binaryId name [x,y] = return $ TFun name [x,y] 2 
-binaryId name e  = throwError $ NumArgs name 2 e
+binaryId name e  = throwError $ NumArgs name 2 (map Term e)
 
 getmsg :: TermFun
 getmsg [TFun "sign" [_,y] 2] = return y
@@ -416,23 +416,42 @@ evalCond env (t1 `Equals` t2) = liftM2 (==) (evalTerm env t1) (evalTerm env t2)
 
 evalTerm :: Env -> Term -> IOThrowsError Value
 evalTerm env (TVar name) = getVar env name
-evalTerm _ (TNum num) = return $ Term $ TNum num
-evalTerm _ (TStr str) = return $ Term $ TStr str
-evalTerm _ (TFun "file" [TStr str] 1) = liftM Chan $ fileChan str
-evalTerm _ (TFun "http" [_] 1) = throwE $ Default "http channels undefined"
+evalTerm _   (TNum num) = return $ Term $ TNum num
+evalTerm _   (TStr str) = return $ Term $ TStr str
+evalTerm _   (TFun "file" [TStr str] 1) = liftM Chan $ fileChan str
+evalTerm _   (TFun "http" [_] 1) = throwE $ Default "http channels undefined"
 evalTerm env (TFun name args _) = do
             fun <- getVar env name
             argVals <- mapM (evalTerm env) args
             apply fun argVals
 
 apply :: Value -> [Value] -> IOThrowsError Value 
-apply (PrimitiveFunc fun) args = liftM Term $  liftThrows $ fun $ map isTerm args
-        where
-            isTerm (Term a) = a
-            isTerm _        = TVar "dummy"  
-apply (Func {})   _   = undefined
-apply e args          = throwE $ NotFunction  ("Found " ++ show e) $ show args
+apply (PrimitiveFunc fun) args = do
+                        ts <- extracTerms args
+                        res <- liftThrows $ fun ts
+                        return $ Term res
+apply (Func params body closure) args =
+    if num params /= num args 
+        then throwE $ NumArgs "user-defined" (num params) args
+        else do
+             clos <- liftIO (bindVars closure $ zip params args)
+             case body of
+                Term t -> evalTerm clos t
+                Proc p -> eval clos p >> return body
+                _      -> throwE $ Default "this function makes no sense"
+    where
+        num = toInteger . length
+apply e _ = throwE $ NotFunction "expecting a function found" $ show e
 
+extracTerms :: [Value] -> IOThrowsError [Term]
+extracTerms ts
+        | all isTerm ts = return $ map (\(Term t) -> t) ts
+        | otherwise     = throwE $ Default "not all terms"
+        
+isTerm :: Value -> Bool
+isTerm (Term _) = True
+isTerm _ = False
+        
 liftThrows :: ThrowsError a -> IOThrowsError a
 liftThrows = either throwE return 
 
@@ -441,42 +460,58 @@ extractValue (Right v) = v
 extractValue (Left  e) = error $ show e
 
 eval :: Env -> PiProcess -> IOThrowsError () 
-eval _ Null        = liftIO $ do
-                        threadId <- myThreadId
-                        putStrLn $ "Stopping Process : " ++ show threadId
-eval env (In a (TVar name))  = do
-                    chan <- evalChan env a
-                    received <- receiveIn chan
-                    _ <- defineVar env name received 
-                    liftIO $ putStrLn $ "Receiving " ++ show received ++ " On " ++ show a
+eval _ Null = liftIO $ do
+                threadId <- myThreadId
+                putStrLn $ "Stopping Process : " ++ show threadId
+eval env (In a (TVar name)) = do
+                chan <- evalChan env a
+                received <- receiveIn chan
+                _ <- defineVar env name received 
+                liftIO $ putStrLn $ "Receiving " ++ show received ++ " On " ++ show a
 eval env (Out a b) = do 
-                    chan <- evalChan env a
-                    bVal <- evalTerm env b
-                    sendOut chan bVal
-                    liftIO $ putStrLn $ "Sending " ++ show bVal ++ " On " ++ show a
+                chan <- evalChan env a
+                bVal <- evalTerm env b
+                sendOut chan bVal
+                liftIO $ putStrLn $ "Sending " ++ show bVal ++ " On " ++ show a
 eval env (Replicate proc) = liftIO (threadDelay 1000000) >> eval env (proc `Conc` Replicate proc)
-eval env (p1 `Conc` p2)   = do
-                    _ <- liftIO $ forkIO $ do {_ <- runExceptT $ eval env p1; return ()} -- there must be a better way
-                    eval env p2
-eval env (p1 `Seq` p2)    = do
-                    eval env p1
-                    eval env p2
-eval env (New var@(TVar name))       = do
-            _ <- defineVar env name $ Term var
-            return ()
-eval env (If b p1 p2)     = do
-            cond <- evalCond env b
-            eval env (if cond then p1 else p2)
-eval env (Let (TVar name) t2 (Just p)) = do
-            val <- evalTerm env t2 
-            newEnv <- liftIO $ bindVars env [(name,val)]
-            eval newEnv p
-eval env (Let (TVar name) t2 Nothing) = do
-            val <- evalTerm env t2
-            _ <- defineVar env name val
-            return ()
-eval env (Let (TFun name args _) t2 p) = undefined
+eval env (p1 `Conc` p2) = do
+                _ <- liftIO $ forkIO $ do {_ <- runExceptT $ eval env p1; return ()} -- there must be a better way
+                eval env p2
+eval env (p1 `Seq` p2) = do
+                eval env p1
+                eval env p2
+eval env (New var@(TVar name)) = do
+                _ <- defineVar env name $ Term var
+                return ()
+eval env (If b p1 p2) = do
+                cond <- evalCond env b
+                eval env (if cond then p1 else p2)
+eval env (Let (TVar name) (Term t2) (Just p)) = do
+                val <- evalTerm env t2 
+                newEnv <- liftIO $ bindVars env [(name,val)]
+                eval newEnv p
+eval env (Let (TVar name) (Term t2) Nothing) = do
+                val <- evalTerm env t2
+                _ <- defineVar env name val
+                return ()
+eval env (Let (TFun name args _) (Term t2) (Just p)) = 
+            defineLocalFun env name args t2 p
+eval env (Let (TFun name args _) (Term t2) Nothing)  = 
+            defineGlobalFun env name args t2
 eval _ _ = throwE $ Default "undefined action"
+
+defineGlobalFun :: Env -> String -> [Term] -> Term -> IOThrowsError ()
+defineGlobalFun env name args term = do
+            _ <- defineVar env name $ makeFun args (Term term) env
+            return ()
+defineLocalFun :: Env -> String -> [Term] -> Term -> PiProcess -> IOThrowsError ()
+defineLocalFun env name args term p = do
+            clos <- liftIO $ bindVars env [(name, makeFun args (Term term) env)]
+            eval clos p
+
+
+makeFun :: [Term] -> Value -> Env -> Value
+makeFun args = Func (map show args)
 
 
 evalString :: Env -> String -> IO String
