@@ -1,5 +1,5 @@
 {-# LANGUAGE TupleSections #-}
-module Main where
+module PiCalculus where
 
 import Control.Arrow (second)
 import Control.Concurrent (forkIO, myThreadId, threadDelay)
