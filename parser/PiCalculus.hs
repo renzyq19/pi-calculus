@@ -14,6 +14,7 @@ import Data.Maybe (isJust)
 import qualified Network as N
 import System.Environment (getArgs, getProgName)
 import System.IO (Handle, hFlush, hGetLine, hPrint, stderr, stdin, stdout)
+import System.IO.Error (catchIOError)
 import Text.ParserCombinators.Parsec
 
 import Data.Map (Map)
@@ -24,11 +25,13 @@ data PiProcess = Null
                | Out  Term Term
                | New  Term
                | PiProcess `Seq`   PiProcess -- Sequential Composition
-               | PiProcess `Conc`  PiProcess -- Parallel   Composition
+               | Conc PiProcess PiProcess -- Parallel   Composition
                | Replicate PiProcess         -- Infinite parallel replication
                | Let Term Value (Maybe PiProcess)
                | If Condition PiProcess PiProcess
-                 deriving (Eq)
+                 deriving (Eq,Show)
+
+infixr 4 `Seq`
 
 data Term = TVar Name 
           | TStr String
@@ -55,6 +58,7 @@ data PiError = NumArgs Name Integer [Value]
 
 data Channel = Channel { 
                chanType    :: Type
+             , clientPort  :: Integer
              , send        :: Value -> IO ()
              , receive     :: IO String
              , extra       :: [Term]
@@ -120,13 +124,13 @@ showPi Null = "0"
 showPi (In c m) =  "in(" ++ show c ++ "," ++ show m ++ ")"
 showPi (Out c m) =  "out(" ++ show c ++ "," ++  show m ++ ")"
 showPi (Replicate proc) =  "!(" ++ show proc ++ ")"
-showPi (p1 `Conc` p2) = show p1 ++ "|\n" ++ show p2
+showPi (Conc p1 p2) = show p1 ++ "|" ++ show p2
 showPi (p1 `Seq` Null) = show p1
-showPi (p1 `Seq` p2) = show p1 ++ ";\n" ++ show p2 
+showPi (p1 `Seq` p2) = show p1 ++ ";" ++ show p2 
 showPi (New n)   = "new " ++ show n
 showPi (If c p1 Null) = "if " ++ show c ++ " then " ++ show p1 
 showPi (If c p1 p2)   = "if " ++ show c ++ " then " ++ show p1 ++ " else " ++ show p2
-showPi (Let n t p)    = "let " ++ show n ++ " = " ++ show t ++ " in\n" ++ show p
+showPi (Let n t p)    = "let " ++ show n ++ " = " ++ show t ++ case p of {Nothing -> "" ; Just x -> " in\n" ++ show x}
 
 showTerm :: Term -> String
 showTerm (TVar x)   = x
@@ -151,7 +155,7 @@ showError (TypeMismatch expected found) = "Invalid type: expected " ++ expected 
 showError (Parser parseErr)             = "Parse error at " ++ show parseErr
 showError (Default msg)                 = msg
 
-instance Show PiProcess where show = showPi
+--instance Show PiProcess where show = showPi
 instance Show Term      where show = showTerm
 instance Show Condition where show = showCond
 instance Show Value     where show = showValue
@@ -330,7 +334,7 @@ counterRef :: String
 counterRef = "###"
 
 stdStrChan :: Handle -> Channel
-stdStrChan h = Channel "string" write rd []
+stdStrChan h = Channel "string" (-1) write rd []
     where
         write = hPrint h
         rd = hGetLine h
@@ -411,10 +415,9 @@ main :: IO ()
 main = do
         name <- getProgName
         args <- getArgs
-        pilude <- readFile "pilude.pi"
         case args of
             []  -> runRepl coreBindings
-            [x] -> runProcess coreBindings x
+            [x] -> readFile x >>= runProcess coreBindings 
             _   -> do
                     putStrLn "Use:"
                     putStrLn $ name ++ " -- Enter the REPL"
@@ -442,7 +445,9 @@ evalTerm env (TPair (t1,t2)) = do
 evalTerm env (TFun "dummy" [] 0) = do
             port <- assignFreePort env
             liftM Chan $ liftIO $ newChan "" ("localhost:"++ show port) port 
-evalTerm _   (TFun "httpChan" [TStr addr] 1) = throwE $ Default "http channels undefined"
+evalTerm env (TFun "httpChan" [TStr addr] 1) = do
+            port <- assignFreePort env
+            liftM Chan $ liftIO $ newChan "http" (addr ++ ":80") port
 evalTerm env (TFun name args _) = do
             fun <- getVar env name
             argVals <- mapM (evalTerm env) args
@@ -452,7 +457,7 @@ evalTerm env (TFun name args _) = do
 assignFreePort :: Env -> IOThrowsError Integer
 assignFreePort env = do
             Term (TNum port) <- getVar env counterRef
-            setVar env counterRef $ Term $ TNum $ port + 1
+            _ <- setVar env counterRef $ Term $ TNum $ port + 1
             if port == 2 ^ 16 
                 then error "HOW MANY CHANNELS DO YOU WANT?!" 
                 else return port
@@ -500,14 +505,14 @@ eval env (In a (TVar name)) = do
                 chan <- evalChan env a
                 received <- receiveIn chan
                 _ <- defineVar env name received 
-                liftIO $ putStrLn $ "Receiving " ++ show received ++ " On " ++ show a
+                return ()
 eval env (Out a b) = do 
                 chan <- evalChan env a
                 bVal <- evalTerm env b
                 sendOut chan bVal
-                liftIO $ putStrLn $ "Sending " ++ show bVal ++ " On " ++ show a
-eval env (Replicate proc) = liftIO (threadDelay 1000000) >> eval env (proc `Conc` Replicate proc)
-eval env (p1 `Conc` p2) = do
+                return ()
+eval env (Replicate proc) = liftIO (threadDelay 1000000) >> eval env (Conc proc $ Replicate proc)
+eval env (Conc p1 p2) = do
                 _ <- liftIO $ forkIO $ do {_ <- runExceptT $ eval env p1; return ()} -- there must be a better way
                 eval env p2
 eval env (p1 `Seq` p2) = do
@@ -569,7 +574,7 @@ runProcess :: IO Env -> String -> IO ()
 runProcess core expr = core >>= flip evalAndPrint expr
 
 runRepl :: IO Env -> IO ()
-runRepl core = core >>= until_ quit (readPrompt "phi >> ") . evalAndPrint
+runRepl core = core >>= until_ quit (readPrompt "phi>") . evalAndPrint
         where
             quit = flip any [":quit",":q"] . (==)
 
@@ -596,7 +601,7 @@ receiveIn chan = do
             _ -> return $ Term term
             where
             decodeChannel e = do
-                let extraStrings = map show e
+                let extraStrings = map (\(TStr x) -> x) e
                 let extraData = map (second tail . break (==dataBreak) ) extraStrings
                 case getChannelData extraData of
                     Just (t,h,p)  -> liftM Chan $ liftIO $ newChan t h p
@@ -607,8 +612,8 @@ getChannelData :: [(String,String)] -> Maybe (Type,String,Integer)
 getChannelData ex = do
         t            <- lookup "type" ex
         host         <- lookup "host" ex
-        clientPort   <- lookup "clientPort" ex
-        return (t,host,read clientPort)
+        cp           <- lookup "clientPort" ex
+        return (t,host,read cp)
 
 evalChan :: Env -> Term -> IOThrowsError Channel
 evalChan env t = do
@@ -624,10 +629,10 @@ testIO = do
     receive c >>= print
 
 newChan :: Type -> String -> Integer -> IO Channel
-newChan t host clientPort = return $ Channel t ss rr ex
+newChan t host cp = return $ Channel t cp ss rr ex
     where
        rr   = N.withSocketsDo $ do    
-            inSock <- N.listenOn $ N.PortNumber $ fromIntegral clientPort
+            inSock <- N.listenOn $ N.PortNumber $ fromIntegral cp  
             (inHandle,_,_)  <- N.accept inSock
             msg <- hGetLine inHandle
             N.sClose inSock
@@ -635,13 +640,17 @@ newChan t host clientPort = return $ Channel t ss rr ex
             
        ss v = N.withSocketsDo $ do
             _ <- forkIO $ do 
-                outHandle <- N.connectTo hostName $ N.PortNumber $ port hostPort 
+                outHandle <- waitForConnect hostName $ N.PortNumber $ port hostPort 
                 hPrint outHandle v
             return ()
+                where waitForConnect h p = N.connectTo h p `catchIOError` (\e -> threadDelay 1000 >> waitForConnect h p)
        port = fromIntegral . read
        (hostName, _:hostPort) = break (==':') host
-       ex = zipWith (\a b -> TStr (a ++ dataBreak : b))  ["host","clientPort","type"] [host,show clientPort,t]
+       ex = zipWith (\a b -> TStr (a ++ dataBreak : b))  ["host","clientPort","type"] [host,show cp,t]
                    
        
 dataBreak :: Char
 dataBreak = '#'
+
+testStr :: String
+testStr = "let a = dummy() in let b = dummy() in (in(a,chan);out(chan,10))|(out(a,b);in(b,msg);out(stdout,msg))"
