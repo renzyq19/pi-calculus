@@ -442,12 +442,15 @@ evalTerm env (TPair (t1,t2)) = do
             case (a,b) of 
                 (Term c, Term d) -> return $ Term $ TPair (c,d)
                 _                -> throwE $ Default "pair not given two terms"
-evalTerm env (TFun "dummy" [] 0) = do
+evalTerm env (TFun "anonChan" [] 0) = do
             port <- assignFreePort env
             liftM Chan $ liftIO $ newChan "" ("localhost:"++ show port) port 
 evalTerm env (TFun "httpChan" [TStr addr] 1) = do
             port <- assignFreePort env
             liftM Chan $ liftIO $ newChan "http" (addr ++ ":80") port
+evalTerm env (TFun "chan" [TStr addr,TNum p] 2) = do
+            port <- assignFreePort env
+            liftM Chan $ liftIO $ newChan "string" (addr ++ ":" ++ show p) p
 evalTerm env (TFun name args _) = do
             fun <- getVar env name
             argVals <- mapM (evalTerm env) args
