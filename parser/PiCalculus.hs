@@ -13,7 +13,7 @@ import Data.List (intercalate)
 import Data.Maybe (isJust)
 import qualified Network as N
 import System.Environment (getArgs, getProgName)
-import System.IO (Handle, hFlush, hGetLine, hPrint, hShow, stderr, stdin, stdout)
+import System.IO (Handle, hFlush, hGetLine, hPrint, stderr, stdin, stdout)
 import Text.ParserCombinators.Parsec
 
 import Data.Map (Map)
@@ -599,16 +599,16 @@ receiveIn chan = do
                 let extraStrings = map show e
                 let extraData = map (second tail . break (==dataBreak) ) extraStrings
                 case getChannelData extraData of
-                    Just d  -> liftM Chan $ liftIO $ (uncurry . uncurry $ newChan) d
+                    Just (t,h,p)  -> liftM Chan $ liftIO $ newChan t h p
                     Nothing -> throwE $ Default "incomplete data in channel"
                 
 
-getChannelData :: [(String,String)] -> Maybe ((Type,String),Integer)
+getChannelData :: [(String,String)] -> Maybe (Type,String,Integer)
 getChannelData ex = do
         t            <- lookup "type" ex
         host         <- lookup "host" ex
         clientPort   <- lookup "clientPort" ex
-        return ((t,host),read clientPort)
+        return (t,host,read clientPort)
 
 evalChan :: Env -> Term -> IOThrowsError Channel
 evalChan env t = do
