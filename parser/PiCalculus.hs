@@ -12,6 +12,8 @@ import Data.IORef (IORef, newIORef, readIORef,writeIORef)
 import Data.List (intercalate)
 import Data.Maybe (isJust)
 import qualified Network as N
+import Network.HTTP.Base (Request(..), RequestMethod(..), mkRequest)
+import Network.URI (parseURI)
 import System.Environment (getArgs, getProgName)
 import System.IO (Handle, hFlush, hGetLine, hPrint, stderr, stdin, stdout)
 import System.IO.Error (catchIOError)
@@ -354,6 +356,7 @@ primitives = [ ("fst"       , first)
              , ("snd"       , secnd)
              , ("hash"      , unaryId "hash")
              , ("pk"        , unaryId "pk")
+             , ("httpRequest", http)
              , ("getmsg"    , getmsg)
              , ("pair"      , binaryId "pair")
              , ("sdec"      , sdec)
@@ -410,6 +413,11 @@ adec e = throwError $ TypeMismatch "(var,aenc(pk(var),var))" $ map Term e
 checksign :: TermFun
 checksign [TFun "pk" [k1] 1 , TFun "sign" [k2,_] 2 ] = return $ TBool (k1 == k2)
 checksign e = throwError $ TypeMismatch "(pk(var),sign(var,var))" $ map Term e
+
+http :: TermFun
+http [TStr url] = case httpGetRequest url of
+                        Just x  -> return $ TStr x
+                        Nothing -> throwError $ Default "malformed uri"
 
 main :: IO ()
 main = do
@@ -646,7 +654,10 @@ newChan t host cp = return $ Channel t cp ss rr ex
                 outHandle <- waitForConnect hostName $ N.PortNumber $ port hostPort 
                 hPrint outHandle v
             return ()
-                where waitForConnect h p = N.connectTo h p `catchIOError` (\e -> threadDelay 1000 >> waitForConnect h p)
+                where waitForConnect h p = N.connectTo h p `catchIOError` (\e -> do
+                                                                threadDelay 10000
+                                                                putStrLn "waiting for connection"
+                                                                waitForConnect h p)
        port = fromIntegral . read
        (hostName, _:hostPort) = break (==':') host
        ex = zipWith (\a b -> TStr (a ++ dataBreak : b))  ["host","clientPort","type"] [host,show cp,t]
@@ -654,6 +665,12 @@ newChan t host cp = return $ Channel t cp ss rr ex
        
 dataBreak :: Char
 dataBreak = '#'
+
+httpGetRequest :: String -> Maybe String
+httpGetRequest str = do
+        uri <- parseURI str
+        return $ show (mkRequest GET uri :: Request String)
+
 
 testStr :: String
 testStr = "let a = dummy() in let b = dummy() in (in(a,chan);out(chan,10))|(out(a,b);in(b,msg);out(stdout,msg))"
