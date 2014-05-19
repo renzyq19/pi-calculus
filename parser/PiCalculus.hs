@@ -2,7 +2,8 @@
 module Main where
 
 import Control.Arrow (second)
-import Control.Concurrent (forkIO, myThreadId, threadDelay)
+import Control.Concurrent (forkIO, threadDelay)
+import Control.Concurrent.MVar (newEmptyMVar,takeMVar,tryPutMVar)
 import Control.Monad (liftM, liftM2, unless)
 import Control.Monad.Error (throwError)
 import Control.Monad.Trans (liftIO)
@@ -505,9 +506,7 @@ extractValue (Right v) = v
 extractValue (Left  e) = error $ show e
 
 eval :: Env -> PiProcess -> IOThrowsError () 
-eval _ Null = liftIO $ do
-                threadId <- myThreadId
-                putStrLn $ "Stopping Process : " ++ show threadId
+eval _ Null = return ()
 eval env (In a (TVar name)) = do
                 chan <- evalChan env a
                 received <- receiveIn chan
@@ -519,7 +518,22 @@ eval env (Out a b) = do
                 sendOut chan bVal
                 return ()
 eval env (Replicate proc) = liftIO (threadDelay 1000000) >> eval env (Conc [proc, Replicate proc])
-eval env (Conc procs) = mapM_ (\proc -> liftIO $ forkIO $ do {_ <- runExceptT $ eval env proc; return ()}) procs -- there must be a better way
+eval env (Conc [proc]) = eval env proc
+eval env (Conc procs)  = do
+                var <- liftIO newEmptyMVar 
+                mapM_ (forkProcess var) procs
+                res <- liftIO $ takeMVar var
+                case res of
+                    Left err -> throwE err
+                    Right _  -> return ()
+        where
+            forkProcess var proc = liftIO $ forkIO $ do
+                        res <- runExceptT $ eval env proc
+                        _ <- tryPutMVar var res
+                        return ()
+                         
+                                        
+
 eval env (p1 `Seq` p2) = do
                 eval env p1
                 eval env p2
