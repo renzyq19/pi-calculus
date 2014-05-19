@@ -27,13 +27,11 @@ data PiProcess = Null
                | Out  Term Term
                | New  Term
                | PiProcess `Seq`   PiProcess -- Sequential Composition
-               | Conc PiProcess PiProcess -- Parallel   Composition
+               | Conc [PiProcess]            -- Parallel   Composition
                | Replicate PiProcess         -- Infinite parallel replication
                | Let Term Value (Maybe PiProcess)
                | If Condition PiProcess PiProcess
                  deriving (Eq,Show)
-
-infixr 4 `Seq`
 
 data Term = TVar Name 
           | TStr String
@@ -126,7 +124,7 @@ showPi Null = "0"
 showPi (In c m) =  "in(" ++ show c ++ "," ++ show m ++ ")"
 showPi (Out c m) =  "out(" ++ show c ++ "," ++  show m ++ ")"
 showPi (Replicate proc) =  "!(" ++ show proc ++ ")"
-showPi (Conc p1 p2) = show p1 ++ "|" ++ show p2
+showPi (Conc procs) = intercalate "|" $ map show procs 
 showPi (p1 `Seq` Null) = show p1
 showPi (p1 `Seq` p2) = show p1 ++ ";" ++ show p2 
 showPi (New n)   = "new " ++ show n
@@ -296,7 +294,7 @@ parseTerm =  try parseTFun
          <|> parseTStr
 
 parseProcess :: Parser PiProcess
-parseProcess = liftM (fold Conc) $ sepBy parseProcess' (paddedChar '|')
+parseProcess = liftM Conc $ sepBy parseProcess' (paddedChar '|')
     where
     parseProcess'  = bracketed parseProcess'' <|> parseProcess''
     parseProcess'' = parseNull 
@@ -306,8 +304,6 @@ parseProcess = liftM (fold Conc) $ sepBy parseProcess' (paddedChar '|')
                  <|> parseReplicate
                  <|> parseNew
                  <|> parseLet
-    fold _ [] = Null
-    fold f xs = foldr1 f xs
 
 bracketed :: Parser a -> Parser a
 bracketed parser = do
@@ -522,10 +518,8 @@ eval env (Out a b) = do
                 bVal <- evalTerm env b
                 sendOut chan bVal
                 return ()
-eval env (Replicate proc) = liftIO (threadDelay 1000000) >> eval env (Conc proc $ Replicate proc)
-eval env (Conc p1 p2) = do
-                _ <- liftIO $ forkIO $ do {_ <- runExceptT $ eval env p1; return ()} -- there must be a better way
-                eval env p2
+eval env (Replicate proc) = liftIO (threadDelay 1000000) >> eval env (Conc [proc, Replicate proc])
+eval env (Conc procs) = mapM_ (\proc -> liftIO $ forkIO $ do {_ <- runExceptT $ eval env proc; return ()}) procs -- there must be a better way
 eval env (p1 `Seq` p2) = do
                 eval env p1
                 eval env p2
