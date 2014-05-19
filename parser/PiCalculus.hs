@@ -3,7 +3,7 @@ module Main where
 
 import Control.Arrow (second)
 import Control.Concurrent (forkIO, threadDelay)
-import Control.Concurrent.MVar (newEmptyMVar,takeMVar,tryPutMVar)
+import Control.Concurrent.MVar (newEmptyMVar, putMVar, readMVar, takeMVar, tryPutMVar)
 import Control.Monad (liftM, liftM2, unless)
 import Control.Monad.Error (throwError)
 import Control.Monad.Trans (liftIO)
@@ -16,7 +16,7 @@ import qualified Network as N
 import Network.HTTP.Base (Request(..), RequestMethod(..), mkRequest)
 import Network.URI (parseURI)
 import System.Environment (getArgs, getProgName)
-import System.IO (Handle, hFlush, hGetLine, hPrint, stderr, stdin, stdout)
+import System.IO (Handle, hFlush, hGetContents, hGetLine, hPrint, hShow, stderr, stdin, stdout)
 import System.IO.Error (catchIOError)
 import Text.ParserCombinators.Parsec
 
@@ -336,8 +336,9 @@ coreBindings = do
                 n <- nullEnv 
                 e1 <- bindVars n (map (second PrimitiveFunc) primitives) 
                 e2 <- bindVars e1 (map (second Chan) nativeChannels)
-                bindVars e2 [(counterRef,Term $ TNum (2^15 + 2^14))]
-                
+                bindVars e2 [(counterRef, Term $ TNum lowestPort)]
+                where 
+                    lowestPort = 2^(15::Integer) + 2^(14::Integer)
 counterRef :: String
 counterRef = "###"
 
@@ -425,8 +426,9 @@ http [TStr url] = case httpGetRequest http' of
                         Just x  -> return $ TStr x
                         Nothing -> throwError $ Default "malformed uri"
     where
-        http' = if (take 7 url /= http'') then (http'' ++ url) else url
+        http'  = if take 7 url /= http'' then http'' ++ url else url
         http'' = "http://" 
+http _ = throwError $ Default "undefined"
 
 main :: IO ()
 main = do
@@ -462,10 +464,10 @@ evalTerm env (TPair (t1,t2)) = do
 evalTerm env (TFun "anonChan" [] 0) = do
             port <- assignFreePort env
             liftM Chan $ liftIO $ newChan "" ("localhost:"++ show port) port 
-evalTerm env (TFun "anonChan" [TNum n] 1) = liftM Chan $ liftIO $ newChan "" ("localhost:"++ show n) n 
+evalTerm _   (TFun "anonChan" [TNum n] 1) = liftM Chan $ liftIO $ newChan "" ("localhost:"++ show n) n 
 evalTerm env (TFun "httpChan" [TStr addr] 1) = do
             port <- assignFreePort env
-            liftM Chan $ liftIO $ newChan "http" (addr ++ ":80") port
+            liftM Chan $ liftIO $ newExternChan "http" (addr ++ ":80") port
 evalTerm env (TFun "chan" [TStr addr,TNum p] 2) = do
             port <- assignFreePort env
             liftM Chan $ liftIO $ newChan "string" (addr ++ ":" ++ show p) port
@@ -479,7 +481,7 @@ assignFreePort :: Env -> IOThrowsError Integer
 assignFreePort env = do
             Term (TNum port) <- getVar env counterRef
             _ <- setVar env counterRef $ Term $ TNum $ port + 1
-            if port == 2 ^ 16 
+            if port == 2 ^ (16 :: Integer)
                 then error "HOW MANY CHANNELS DO YOU WANT?!" 
                 else return port
 
@@ -580,10 +582,8 @@ defineLocalFun env name args term p = do
             clos <- liftIO $ bindVars env [(name, makeFun args term env)]
             eval clos p
 
-
 makeFun :: [Term] -> Value -> Env -> Value
 makeFun args = Func (map show args)
-
 
 evalString :: Env -> String -> IO String
 evalString env expr = runIOThrows $ liftM show $ liftThrows (readProgram expr) >>= eval env
@@ -600,8 +600,11 @@ readTerm str = case parse parseTerm "Term" str of
                 Right val -> return val 
 
 evalAndPrint :: Env -> String -> IO ()
-evalAndPrint _   []   = return () 
-evalAndPrint env expr = evalString env expr >>= putStrLn
+evalAndPrint env expr = do
+            res <- evalString env expr 
+            case res of
+                "()"  -> return ()
+                _     -> putStrLn res
 
 runProcess :: IO Env -> String -> IO ()
 runProcess core expr = core >>= flip evalAndPrint expr
@@ -655,11 +658,6 @@ evalChan env t = do
                 Chan c -> return c
                 _      -> throwE $ NotChannel $ show t
 
-testIO :: IO ()
-testIO = do
-    c <- newChan "" "localhost:9000" 9000
-    send c $ Term $ TBool True
-    receive c >>= print
 
 newChan :: Type -> String -> Integer -> IO Channel
 newChan t host cp = return $ Channel t cp ss rr ex
@@ -670,13 +668,12 @@ newChan t host cp = return $ Channel t cp ss rr ex
             msg <- hGetLine inHandle
             N.sClose inSock
             return msg
-            
        ss v = N.withSocketsDo $ do
             _ <- forkIO $ do 
                 outHandle <- waitForConnect hostName $ N.PortNumber $ port hostPort 
                 hPrint outHandle v
             return ()
-                where waitForConnect h p = N.connectTo h p `catchIOError` (\e -> do
+                where waitForConnect h p = N.connectTo h p `catchIOError` (\_ -> do
                                                                 threadDelay 10000
                                                                 putStrLn "waiting for connection"
                                                                 waitForConnect h p)
@@ -684,6 +681,35 @@ newChan t host cp = return $ Channel t cp ss rr ex
        (hostName, _:hostPort) = break (==':') host
        ex = zipWith (\a b -> TStr (a ++ dataBreak : b))  ["host","clientPort","type"] [host,show cp,t]
                    
+newExternChan :: Type -> String -> Integer -> IO Channel
+newExternChan t host cp = N.withSocketsDo $ do
+    hanVar <- newEmptyMVar
+    _ <- forkIO $ do 
+        outHandle <- waitForConnect hostName $ N.PortNumber $ port hostPort 
+        putMVar hanVar outHandle 
+    let s v = do 
+        han <- takeMVar hanVar
+        printH han
+        putStrLn $ "sending " ++ show v 
+        hPrint han v
+        hFlush han
+        putMVar hanVar han
+    let r = do
+        han <- readMVar hanVar
+        printH han
+        msg <- hGetContents han
+        putStrLn $ "receiving " ++ msg
+        return msg 
+    return $ Channel t cp s r ex
+    where
+       waitForConnect h p = N.connectTo h p `catchIOError` 
+                                    (\_ -> do
+                                        threadDelay 10000
+                                        putStrLn "waiting for connection"
+                                        waitForConnect h p)
+       port = fromIntegral . read
+       (hostName, _:hostPort) = break (==':') host
+       ex = zipWith (\a b -> TStr (a ++ dataBreak : b))  ["host","clientPort","type"] [host,show cp,t]
        
 dataBreak :: Char
 dataBreak = '#'
@@ -693,10 +719,8 @@ httpGetRequest str = do
         uri <- parseURI str
         return $ show (mkRequest GET uri :: Request String)
 
-test :: IO ()
-test = do
-    sock <- N.listenOn $ N.PortNumber 80
-    (inHandle,_,_) <- N.accept sock
-    msg <- hGetLine inHandle
-    putStrLn msg
+printH :: Handle -> IO ()
+printH h = do
+   hstr <- hShow h
+   putStrLn hstr
 
