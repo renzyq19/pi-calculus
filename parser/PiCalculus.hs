@@ -547,8 +547,6 @@ eval env (Conc procs)  = do
                         res <- runExceptT $ eval env proc
                         _ <- tryPutMVar var res
                         return ()
-                         
-                                        
 
 eval env (p1 `Seq` p2) = do
                 eval env p1
