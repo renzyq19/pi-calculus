@@ -1,25 +1,19 @@
 import Network
-import System.IO
 import Control.Concurrent
-
+import System.IO
+import Network.HTTP.Base
+import Network.URI
+import Data.Maybe
+ 
 main :: IO ()
-main = withSocketsDo $ do
-    _ <- forkIO recv
-    --_ <- forkIO send
+main = do
+    forkIO $ do
+        handle <- connectTo "www.google.com" (PortNumber 80)
+        hPutStr handle $ fromJust $ httpGetRequest "http://google.com"
+        hFlush handle
     return ()
 
-recv :: IO ()
-recv = do
-    s2 <- listenOn $ PortNumber 9000
-    (h,_,_) <- accept s2
-    str <- hGetLine h
-    hShow h >>= putStrLn
-    sClose s2
-    putStrLn str
-
-send :: IO ()
-send = do 
-    s1 <- connectTo "localhost" $ PortNumber 9000
-    hPutStrLn s1 "hello"
-
-
+httpGetRequest :: String -> Maybe String
+httpGetRequest str = do
+        uri <- parseURI str
+        return $ show (mkRequest GET uri :: Request String)

@@ -421,9 +421,12 @@ checksign [TFun "pk" [k1] 1 , TFun "sign" [k2,_] 2 ] = return $ TBool (k1 == k2)
 checksign e = throwError $ TypeMismatch "(pk(var),sign(var,var))" $ map Term e
 
 http :: TermFun
-http [TStr url] = case httpGetRequest url of
+http [TStr url] = case httpGetRequest http' of
                         Just x  -> return $ TStr x
                         Nothing -> throwError $ Default "malformed uri"
+    where
+        http' = if (take 7 url /= http'') then (http'' ++ url) else url
+        http'' = "http://" 
 
 main :: IO ()
 main = do
@@ -465,7 +468,7 @@ evalTerm env (TFun "httpChan" [TStr addr] 1) = do
             liftM Chan $ liftIO $ newChan "http" (addr ++ ":80") port
 evalTerm env (TFun "chan" [TStr addr,TNum p] 2) = do
             port <- assignFreePort env
-            liftM Chan $ liftIO $ newChan "string" (addr ++ ":" ++ show p) p
+            liftM Chan $ liftIO $ newChan "string" (addr ++ ":" ++ show p) port
 evalTerm env (TFun name args _) = do
             fun <- getVar env name
             argVals <- mapM (evalTerm env) args
