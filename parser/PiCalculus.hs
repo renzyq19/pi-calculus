@@ -296,8 +296,12 @@ parseTerm =  try parseAnonChan
          <|> parseTStr
          where
             parseAnonChan = do
-                paddedStr "()"
-                return $ TFun "anonChan" [] 0
+                paddedChar '('
+                arg <- many digit
+                paddedChar ')'
+                case arg of
+                    [] -> return $ TFun "anonChan" [] 0
+                    _  -> return $ TFun "anonChan" [TNum (read arg)] 1
 
 parseProcess :: Parser PiProcess
 parseProcess = liftM Conc $ sepBy parseProcess' (paddedChar '|')
@@ -455,6 +459,7 @@ evalTerm env (TPair (t1,t2)) = do
 evalTerm env (TFun "anonChan" [] 0) = do
             port <- assignFreePort env
             liftM Chan $ liftIO $ newChan "" ("localhost:"++ show port) port 
+evalTerm env (TFun "anonChan" [TNum n] 1) = liftM Chan $ liftIO $ newChan "" ("localhost:"++ show n) n 
 evalTerm env (TFun "httpChan" [TStr addr] 1) = do
             port <- assignFreePort env
             liftM Chan $ liftIO $ newChan "http" (addr ++ ":80") port
@@ -685,6 +690,10 @@ httpGetRequest str = do
         uri <- parseURI str
         return $ show (mkRequest GET uri :: Request String)
 
+test :: IO ()
+test = do
+    sock <- N.listenOn $ N.PortNumber 80
+    (inHandle,_,_) <- N.accept sock
+    msg <- hGetLine inHandle
+    putStrLn msg
 
-testStr :: String
-testStr = "let a = dummy() in let b = dummy() in (in(a,chan);out(chan,10))|(out(a,b);in(b,msg);out(stdout,msg))"
