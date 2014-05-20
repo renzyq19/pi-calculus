@@ -12,16 +12,16 @@ import Data.Char (toLower)
 import Data.IORef (IORef, newIORef, readIORef,writeIORef)
 import Data.List (intercalate)
 import Data.Maybe (isJust)
-import qualified Network as N
 import Network.HTTP.Base (Request(..), RequestMethod(..), mkRequest)
 import Network.URI (parseURI)
 import System.Environment (getArgs, getProgName)
-import System.IO (Handle, hFlush, hGetContents, hGetLine, hPrint, hShow, stderr, stdin, stdout)
-import System.IO.Error (catchIOError)
+import System.IO (hFlush, stderr, stdin, stdout)
 import Text.ParserCombinators.Parsec
 
 import Data.Map (Map)
 import qualified Data.Map as Map
+
+import Channel
 
 data PiProcess = Null
                | In   Term Term
@@ -56,14 +56,6 @@ data PiError = NumArgs Name Integer [Value]
              | NotFunction String String
              | NotChannel String
              | Default String
-
-data Channel = Channel { 
-               chanType    :: Type
-             , clientPort  :: Integer
-             , send        :: Value -> IO ()
-             , receive     :: IO String
-             , extra       :: [Term]
-             }
 
 type IOThrowsError = ExceptT PiError IO 
 type ThrowsError   = Either  PiError
@@ -108,7 +100,7 @@ showValue (Proc p)  = show p
 showValue (Term t)  = show t
 showValue (Chan c)  = show $ convert c
     where 
-        convert ch = TFun "<chan>" ex $ length ex
+        convert ch = TFun "<chan>" (map TStr ex) $ length ex
             where ex = extra ch
 showValue (PrimitiveFunc _)  = "<primitive>" 
 showValue (Func {})          = "<user function>"  
@@ -342,11 +334,6 @@ coreBindings = do
 counterRef :: String
 counterRef = "###"
 
-stdStrChan :: Handle -> Channel
-stdStrChan h = Channel "string" (-1) write rd []
-    where
-        write = hPrint h
-        rd = hGetLine h
 
 
 nativeChannels :: [(String   , Channel)]
@@ -624,7 +611,7 @@ flushStr :: String -> IO ()
 flushStr str = putStr str >> hFlush stdout
 
 sendOut :: Channel -> Value -> IOThrowsError () 
-sendOut chan val = liftIO $ send chan val
+sendOut chan val = liftIO $ send chan $ show val
 
 receiveIn :: Channel -> IOThrowsError Value
 receiveIn chan = do
@@ -642,7 +629,7 @@ receiveIn chan = do
                     Nothing -> throwE $ Default "incomplete data in channel"
                 
 
-getChannelData :: [(String,String)] -> Maybe (Type,String,Integer)
+getChannelData :: [(String,String)] ->  Maybe (Type,String,Integer)
 getChannelData ex = do
         t            <- lookup "type" ex
         host         <- lookup "host" ex
@@ -657,68 +644,8 @@ evalChan env t = do
                 _      -> throwE $ NotChannel $ show t
 
 
-newChan :: Type -> String -> Integer -> IO Channel
-newChan t host cp = return $ Channel t cp ss rr ex
-    where
-       rr   = N.withSocketsDo $ do    
-            inSock <- N.listenOn $ N.PortNumber $ fromIntegral cp  
-            (inHandle,_,_)  <- N.accept inSock
-            msg <- hGetLine inHandle
-            N.sClose inSock
-            return msg
-       ss v = N.withSocketsDo $ do
-            _ <- forkIO $ do 
-                outHandle <- waitForConnect hostName $ N.PortNumber $ port hostPort 
-                hPrint outHandle v
-            return ()
-                where waitForConnect h p = N.connectTo h p `catchIOError` (\_ -> do
-                                                                threadDelay 10000
-                                                                putStrLn "waiting for connection"
-                                                                waitForConnect h p)
-       port = fromIntegral . read
-       (hostName, _:hostPort) = break (==':') host
-       ex = zipWith (\a b -> TStr (a ++ dataBreak : b))  ["host","clientPort","type"] [host,show cp,t]
-                   
-newExternChan :: Type -> String -> Integer -> IO Channel
-newExternChan t host cp = N.withSocketsDo $ do
-    hanVar <- newEmptyMVar
-    _ <- forkIO $ do 
-        outHandle <- waitForConnect hostName $ N.PortNumber $ port hostPort 
-        putMVar hanVar outHandle 
-    let s v = do 
-        han <- takeMVar hanVar
-        printH han
-        putStrLn $ "sending " ++ show v 
-        hPrint han v
-        hFlush han
-        putMVar hanVar han
-    let r = do
-        han <- readMVar hanVar
-        printH han
-        msg <- hGetContents han
-        putStrLn $ "receiving " ++ msg
-        return msg 
-    return $ Channel t cp s r ex
-    where
-       waitForConnect h p = N.connectTo h p `catchIOError` 
-                                    (\_ -> do
-                                        threadDelay 10000
-                                        putStrLn "waiting for connection"
-                                        waitForConnect h p)
-       port = fromIntegral . read
-       (hostName, _:hostPort) = break (==':') host
-       ex = zipWith (\a b -> TStr (a ++ dataBreak : b))  ["host","clientPort","type"] [host,show cp,t]
-       
-dataBreak :: Char
-dataBreak = '#'
-
 httpGetRequest :: String -> Maybe String
 httpGetRequest str = do
         uri <- parseURI str
         return $ show (mkRequest GET uri :: Request String)
-
-printH :: Handle -> IO ()
-printH h = do
-   hstr <- hShow h
-   putStrLn hstr
 
