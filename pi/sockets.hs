@@ -4,6 +4,7 @@ import System.IO
 import Network.HTTP.Base
 import Network.URI
 import Data.Maybe
+import Channel
  
 main :: IO ()
 main = do
@@ -26,3 +27,16 @@ httpGetRequest :: String -> Maybe String
 httpGetRequest str = do
         uri <- parseURI str
         return $ show (mkRequest GET uri :: Request String)
+
+local :: IO ()
+local = do
+    chan <- newLocalChan "" 8000
+    _ <- receive chan
+    send chan "Thanks for that"
+    
+foreig :: IO ()
+foreig = do
+    chan <- newForeignChan "" "localhost:8000"
+    send chan "you look nice"
+    receive chan >>= putStrLn
+    
