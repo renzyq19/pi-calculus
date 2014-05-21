@@ -3,7 +3,7 @@ module Main where
 
 import Control.Arrow (second)
 import Control.Concurrent (forkIO, threadDelay)
-import Control.Concurrent.MVar (newEmptyMVar, putMVar, readMVar, takeMVar, tryPutMVar)
+import Control.Concurrent.MVar (newEmptyMVar, takeMVar, tryPutMVar)
 import Control.Monad (liftM, liftM2, unless)
 import Control.Monad.Error (throwError)
 import Control.Monad.Trans (liftIO)
@@ -450,11 +450,11 @@ evalTerm env (TPair (t1,t2)) = do
                 _                -> throwE $ Default "pair not given two terms"
 evalTerm env (TFun "anonChan" [] 0) = do
             port <- assignFreePort env
-            liftM Chan $ liftIO $ newChan "" ("localhost:"++ show port) port 
-evalTerm _   (TFun "anonChan" [TNum n] 1) = liftM Chan $ liftIO $ newChan "" ("localhost:"++ show n) n 
+            liftM Chan $ liftIO $ newChan "internal" ("localhost:"++ show port) port 
+evalTerm _   (TFun "anonChan" [TNum n] 1) = liftM Chan $ liftIO $ newChan "internal" ("localhost:"++ show n) n 
 evalTerm env (TFun "httpChan" [TStr addr] 1) = do
             port <- assignFreePort env
-            liftM Chan $ liftIO $ newExternChan "http" (addr ++ ":80") port
+            liftM Chan $ liftIO $ newChan "http" (addr ++ ":80") port
 evalTerm env (TFun "chan" [TStr addr,TNum p] 2) = do
             port <- assignFreePort env
             liftM Chan $ liftIO $ newChan "string" (addr ++ ":" ++ show p) port
@@ -478,14 +478,14 @@ apply (PrimitiveFunc fun) args = do
                         ts <- extracTerms args
                         res <- liftThrows $ fun ts
                         return $ Term res
-apply (Func params body closure) args =
-    if num params /= num args 
-        then throwE $ NumArgs "user-defined" (num params) args
+apply (Func parms bdy closre) args =
+    if num parms /= num args 
+        then throwE $ NumArgs "user-defined" (num parms) args
         else do
-             clos <- liftIO (bindVars closure $ zip params args)
-             case body of
+             clos <- liftIO (bindVars closre $ zip parms args)
+             case bdy of
                 Term t -> evalTerm clos t
-                Proc p -> eval clos p >> return body
+                Proc p -> eval clos p >> return bdy
                 _      -> throwE $ Default "this function makes no sense"
     where
         num = toInteger . length
@@ -534,7 +534,6 @@ eval env (Conc procs)  = do
                         res <- runExceptT $ eval env proc
                         _ <- tryPutMVar var res
                         return ()
-
 eval env (p1 `Seq` p2) = do
                 eval env p1
                 eval env p2
@@ -623,13 +622,13 @@ receiveIn chan = do
             where
             decodeChannel e = do
                 let extraStrings = map (\(TStr x) -> x) e
-                let extraData = map (second tail . break (==dataBreak) ) extraStrings
+                let extraData = map (second tail . break (==dataBreak)) extraStrings
                 case getChannelData extraData of
                     Just (t,h,p)  -> liftM Chan $ liftIO $ newChan t h p
                     Nothing -> throwE $ Default "incomplete data in channel"
                 
 
-getChannelData :: [(String,String)] ->  Maybe (Type,String,Integer)
+getChannelData :: [(String,String)] -> Maybe (Type, String, Integer)
 getChannelData ex = do
         t            <- lookup "type" ex
         host         <- lookup "host" ex

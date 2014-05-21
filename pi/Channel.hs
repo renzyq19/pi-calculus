@@ -1,7 +1,12 @@
-module Channel where
+module Channel  (
+    Channel (..),
+    stdStrChan  ,
+    newChan     ,
+    dataBreak   )
+    where
 
 import qualified Network as N
-import System.IO (Handle, hFlush, hGetContents, hGetLine, hPrint, hPutStrLn, hShow)
+import System.IO (Handle, hGetLine, hPrint, hPutStrLn, hShow)
 import System.IO.Error (catchIOError)
 import Control.Concurrent (forkIO,threadDelay)
 import Control.Concurrent.MVar
@@ -21,24 +26,31 @@ stdStrChan h = Channel "string" (-1) write rd []
         rd = hGetLine h
 
 newChan :: String -> String -> Integer -> IO Channel
-newChan = newInternalChan
+newChan t host cp = case hostName of
+            "localhost" 
+                    | t == "internal" -> newInternalChan host cp
+                    | cp == -1        -> newForeignChan t host
+                    | otherwise       -> newLocalChan t cp
+            _           -> newForeignChan t host
+       where
+       (hostName, _) = break (==':') host
 
-newInternalChan :: String -> String -> Integer -> IO Channel
-newInternalChan t host cp = return $ Channel t cp ss rr ex
+newInternalChan :: String -> Integer -> IO Channel
+newInternalChan host cp = return $ Channel "internal" cp s r ex
     where
-       rr   = N.withSocketsDo $ do
+       r   = N.withSocketsDo $ do
             inSock <- N.listenOn $ N.PortNumber $ fromIntegral cp
             (inHandle,_,_)  <- N.accept inSock
             msg <- hGetLine inHandle
             N.sClose inSock
             return msg
-       ss v = N.withSocketsDo $ do
+       s v = N.withSocketsDo $ do
             _ <- forkIO $ do
                 outHandle <- waitForConnect hostName $ N.PortNumber $ port hostPort
                 hPrint outHandle v
             return ()
        (hostName, _:hostPort) = break (==':') host
-       ex = zipWith (\a b -> (a ++ dataBreak : b))  ["host","clientPort","type"] [host,show cp,t]
+       ex = zipWith (\a b -> (a ++ dataBreak : b))  ["host","clientPort","type"] [host,show cp,"internal"]
 
 newLocalChan :: String -> Integer -> IO Channel
 newLocalChan t cp = N.withSocketsDo $ do
@@ -60,7 +72,7 @@ newForeignChan t host = N.withSocketsDo $ do
     return $ Channel t 0 (send' hanVar) (receive' hanVar) ex
     where
        (hostName, _:hostPort) = break (==':') host
-       ex = zipWith (\a b -> a ++ dataBreak : b)  ["host","clientPort","type"] [host,"0",t]
+       ex = zipWith (\a b -> a ++ dataBreak : b)  ["host","clientPort","type"] [host,"-1",t]
 
 port :: String -> N.PortNumber
 port s = fromIntegral  (read s :: Integer)
