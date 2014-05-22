@@ -6,13 +6,16 @@ module Channel  (
     where
 
 import qualified Network as N
+import Network.BSD (getHostName)
 import System.IO (Handle, hGetContents, hGetLine, hPrint, hPutStrLn, hShow)
 import System.IO.Error (catchIOError)
 import Control.Concurrent (forkIO,threadDelay)
 import Control.Concurrent.MVar
 
+import Types 
+
 data Channel = Channel {
-               chanType    :: String
+               chanType    :: ChannelType
              , clientPort  :: Integer
              , send        :: String -> IO ()
              , receive     :: IO String
@@ -20,23 +23,25 @@ data Channel = Channel {
              }
 
 stdStrChan :: Handle -> Channel
-stdStrChan h = Channel "string" (-1) write rd []
+stdStrChan h = Channel String (-1) write rd []
     where
         write = hPutStrLn h
         rd = hGetLine h
 
-newChan :: String -> String -> Integer -> IO Channel
-newChan t host cp = case hostName of
+newChan :: ChannelType -> String -> Integer -> IO Channel
+newChan t host cp = do {
+            currentHost <- getHostName ;
+            case hostName of 
             "localhost" 
-                    | t == "internal" -> newInternalChan host cp
-                    | cp == -1        -> newForeignChan t host
+                    | t == Internal   -> newInternalChan currentHost hostPort cp
+                    | cp == -1        -> newForeignChan t hostName hostPort 
                     | otherwise       -> newLocalChan t cp
-            _           -> newForeignChan t host
-       where
-       (hostName, _) = break (==':') host
+            _           -> newForeignChan t hostName hostPort } 
+               where
+               (hostName, _:hostPort) = break (==':') host
 
-newInternalChan :: String -> Integer -> IO Channel
-newInternalChan host cp = return $ Channel "internal" cp s r ex
+newInternalChan :: String -> String -> Integer -> IO Channel
+newInternalChan hostName hostPort cp = return $ Channel Internal cp s r ex
     where
        r   = N.withSocketsDo $ do
             inSock <- N.listenOn $ N.PortNumber $ fromIntegral cp
@@ -49,30 +54,30 @@ newInternalChan host cp = return $ Channel "internal" cp s r ex
                 outHandle <- waitForConnect hostName $ N.PortNumber $ port hostPort
                 hPutStrLn outHandle v
             return ()
-       (hostName, _:hostPort) = break (==':') host
-       ex = zipWith (\a b -> (a ++ dataBreak : b))  ["host","clientPort","type"] [host,show cp,"internal"]
+       ex = zipWith (\a b -> (a ++ dataBreak : b))  ["host","clientPort","type"] [hostName ++ ":" ++ hostPort,show cp,show Internal]
 
-newLocalChan :: String -> Integer -> IO Channel
+newLocalChan :: ChannelType -> Integer -> IO Channel
 newLocalChan t cp = N.withSocketsDo $ do
     hanVar <- newEmptyMVar
     _ <- forkIO $ do
         inSock <- N.listenOn $ N.PortNumber $ fromIntegral cp
         (inHandle,_,_)  <- N.accept inSock
         putMVar hanVar inHandle
-    return $ Channel t cp (send' hanVar) (receive' hanVar) ex
+    currentHost <- getHostName
+    let ex' = ex ++ ["host" ++ dataBreak :currentHost]
+    return $ Channel t cp (send' hanVar) (receive' hanVar) ex'
       where
-       ex = zipWith (\a b -> (a ++ dataBreak : b))  ["host","clientPort","type"] ["localhost",show cp,t]
+       ex = zipWith (\a b -> (a ++ dataBreak : b))  ["clientPort","type"] [show cp,show t]
 
-newForeignChan :: String -> String -> IO Channel
-newForeignChan t host = N.withSocketsDo $ do
+newForeignChan :: ChannelType -> String -> String -> IO Channel
+newForeignChan t hostName hostPort = N.withSocketsDo $ do
     hanVar <- newEmptyMVar
     _ <- forkIO $ do
         outHandle <- waitForConnect hostName $ N.PortNumber $ port hostPort
         putMVar hanVar outHandle
     return $ Channel t 0 (send' hanVar) (receive' hanVar) ex
     where
-       (hostName, _:hostPort) = break (==':') host
-       ex = zipWith (\a b -> a ++ dataBreak : b)  ["host","clientPort","type"] [host,"-1",t]
+       ex = zipWith (\a b -> a ++ dataBreak : b)  ["host","clientPort","type"] [hostName ++ ":" ++ hostPort,"-1",show t]
 
 port :: String -> N.PortNumber
 port s = fromIntegral  (read s :: Integer)

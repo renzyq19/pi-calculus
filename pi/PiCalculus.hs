@@ -22,6 +22,7 @@ import Data.Map (Map)
 import qualified Data.Map as Map
 
 import Channel
+import Types
 
 data PiProcess = Null
                | In   Term Term
@@ -61,7 +62,6 @@ type IOThrowsError = ExceptT PiError IO
 type ThrowsError   = Either  PiError
 
 type Name      = String
-type Type      = String
 data Condition = Term `Equals` Term deriving (Eq)
 
 type Env = IORef (Map String Value)
@@ -450,14 +450,14 @@ evalTerm env (TPair (t1,t2)) = do
                 _                -> throwE $ Default "pair not given two terms"
 evalTerm env (TFun "anonChan" [] 0) = do
             port <- assignFreePort env
-            liftM Chan $ liftIO $ newChan "internal" ("localhost:"++ show port) port 
-evalTerm _   (TFun "anonChan" [TNum n] 1) = liftM Chan $ liftIO $ newChan "internal" ("localhost:"++ show n) n 
+            liftM Chan $ liftIO $ newChan Internal ("localhost:"++ show port) port 
+evalTerm _   (TFun "anonChan" [TNum n] 1) = liftM Chan $ liftIO $ newChan Internal ("localhost:"++ show n) n 
 evalTerm env (TFun "httpChan" [TStr addr] 1) = do
             port <- assignFreePort env
-            liftM Chan $ liftIO $ newChan "http" (addr ++ ":80") port
+            liftM Chan $ liftIO $ newChan HTTP (addr ++ ":80") port
 evalTerm env (TFun "chan" [TStr addr,TNum p] 2) = do
             port <- assignFreePort env
-            liftM Chan $ liftIO $ newChan "string" (addr ++ ":" ++ show p) port
+            liftM Chan $ liftIO $ newChan String (addr ++ ":" ++ show p) port
 evalTerm env (TFun name args _) = do
             fun <- getVar env name
             argVals <- mapM (evalTerm env) args
@@ -628,12 +628,12 @@ receiveIn chan = do
                     Nothing -> throwE $ Default "incomplete data in channel"
                 
 
-getChannelData :: [(String,String)] -> Maybe (Type, String, Integer)
+getChannelData :: [(String,String)] -> Maybe (ChannelType, String, Integer)
 getChannelData ex = do
         t            <- lookup "type" ex
         host         <- lookup "host" ex
         cp           <- lookup "clientPort" ex
-        return (t,host,read cp)
+        return (read t,host,read cp)
 
 evalChan :: Env -> Term -> IOThrowsError Channel
 evalChan env t = do
