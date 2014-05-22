@@ -4,7 +4,7 @@
 name:                pi-calculus
 version:             0.4.0
 synopsis:            Applied pi-calculus compiler
--- description:         
+description:         Phi - A compiler for the applied pi-calculus. Very rough around the edges.
 license:             GPL-3
 license-file:        LICENSE
 author:              Will de Renzy-Martin
@@ -16,5 +16,5 @@ cabal-version:       >=1.8
 
 executable phi
   main-is:           PiCalculus.hs
-  -- other-modules:       
-  build-depends:       base >=4.5, mtl ==2.2.*, parsec ==3.1.*, containers ==0.5.*, transformers ==0.4.*, network ==2.5.*, HTTP >=2.15
+  other-modules:     Channel.hs
+  build-depends:       base >=4.5 && <=4.7, mtl ==2.2.*, parsec ==3.1.*, containers ==0.5.*, transformers ==0.4.*, network ==2.5.*, HTTP >=2.15

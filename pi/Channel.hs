@@ -1,8 +1,9 @@
 module Channel  (
-    Channel (..),
-    stdChan     ,
-    newChan     ,
-    dataBreak   )
+    Channel (..)   ,
+    ChannelType(..),
+    stdChan        ,
+    newChan        ,
+    dataBreak      )
     where
 
 import qualified Network as N
@@ -12,8 +13,6 @@ import System.IO.Error (catchIOError)
 import Control.Concurrent (forkIO,threadDelay)
 import Control.Concurrent.MVar
 
-import Types 
-
 data Channel = Channel {
                chanType    :: ChannelType
              , clientPort  :: Integer
@@ -21,6 +20,12 @@ data Channel = Channel {
              , receive     :: IO String
              , extra       :: [String]
              }
+
+data ChannelType = Internal
+                 | Std
+                 | HTTP
+                 | String
+                 deriving (Eq, Show, Read)
 
 stdChan :: Handle -> Channel
 stdChan h = Channel Std (-1) write rd []

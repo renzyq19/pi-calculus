@@ -22,7 +22,6 @@ import Data.Map (Map)
 import qualified Data.Map as Map
 
 import Channel
-import Types
 
 data PiProcess = Null
                | In   Term Term
