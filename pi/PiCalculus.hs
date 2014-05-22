@@ -3,7 +3,7 @@ module Main where
 
 import Control.Arrow (second)
 import Control.Concurrent (forkIO, threadDelay)
-import Control.Concurrent.MVar (newEmptyMVar,takeMVar,tryPutMVar)
+import Control.Concurrent.MVar (newEmptyMVar, takeMVar, tryPutMVar)
 import Control.Monad (liftM, liftM2, unless)
 import Control.Monad.Error (throwError)
 import Control.Monad.Trans (liftIO)
@@ -12,16 +12,16 @@ import Data.Char (toLower)
 import Data.IORef (IORef, newIORef, readIORef,writeIORef)
 import Data.List (intercalate)
 import Data.Maybe (isJust)
-import qualified Network as N
 import Network.HTTP.Base (Request(..), RequestMethod(..), mkRequest)
 import Network.URI (parseURI)
 import System.Environment (getArgs, getProgName)
-import System.IO (Handle, hFlush, hGetLine, hPrint, stderr, stdin, stdout)
-import System.IO.Error (catchIOError)
+import System.IO (hFlush, stderr, stdin, stdout)
 import Text.ParserCombinators.Parsec
 
 import Data.Map (Map)
 import qualified Data.Map as Map
+
+import Channel
 
 data PiProcess = Null
                | In   Term Term
@@ -56,14 +56,6 @@ data PiError = NumArgs Name Integer [Value]
              | NotFunction String String
              | NotChannel String
              | Default String
-
-data Channel = Channel { 
-               chanType    :: Type
-             , clientPort  :: Integer
-             , send        :: Value -> IO ()
-             , receive     :: IO String
-             , extra       :: [Term]
-             }
 
 type IOThrowsError = ExceptT PiError IO 
 type ThrowsError   = Either  PiError
@@ -108,7 +100,7 @@ showValue (Proc p)  = show p
 showValue (Term t)  = show t
 showValue (Chan c)  = show $ convert c
     where 
-        convert ch = TFun "<chan>" ex $ length ex
+        convert ch = TFun "<chan>" (map TStr ex) $ length ex
             where ex = extra ch
 showValue (PrimitiveFunc _)  = "<primitive>" 
 showValue (Func {})          = "<user function>"  
@@ -135,7 +127,7 @@ showPi (Let n t p)    = "let " ++ show n ++ " = " ++ show t ++ case p of {Nothin
 
 showTerm :: Term -> String
 showTerm (TVar x)   = x
-showTerm (TStr str) = show str
+showTerm (TStr str) = "\"" ++ str ++ "\""
 showTerm (TNum num) = show num
 showTerm (TBool b ) = map toLower $ show b
 showTerm (TPair (a,b)) = "pair("++ show a ++ ","++ show b ++ ")"
@@ -336,16 +328,12 @@ coreBindings = do
                 n <- nullEnv 
                 e1 <- bindVars n (map (second PrimitiveFunc) primitives) 
                 e2 <- bindVars e1 (map (second Chan) nativeChannels)
-                bindVars e2 [(counterRef,Term $ TNum (2^15 + 2^14))]
-                
+                bindVars e2 [(counterRef, Term $ TNum lowestPort)]
+                where 
+                    lowestPort = 2^(15::Integer) + 2^(14::Integer)
 counterRef :: String
 counterRef = "###"
 
-stdStrChan :: Handle -> Channel
-stdStrChan h = Channel "string" (-1) write rd []
-    where
-        write = hPrint h
-        rd = hGetLine h
 
 
 nativeChannels :: [(String   , Channel)]
@@ -421,9 +409,13 @@ checksign [TFun "pk" [k1] 1 , TFun "sign" [k2,_] 2 ] = return $ TBool (k1 == k2)
 checksign e = throwError $ TypeMismatch "(pk(var),sign(var,var))" $ map Term e
 
 http :: TermFun
-http [TStr url] = case httpGetRequest url of
+http [TStr url] = case httpGetRequest http' of
                         Just x  -> return $ TStr x
                         Nothing -> throwError $ Default "malformed uri"
+    where
+        http'  = if take 7 url /= http'' then http'' ++ url else url
+        http'' = "http://" 
+http _ = throwError $ Default "undefined"
 
 main :: IO ()
 main = do
@@ -458,14 +450,14 @@ evalTerm env (TPair (t1,t2)) = do
                 _                -> throwE $ Default "pair not given two terms"
 evalTerm env (TFun "anonChan" [] 0) = do
             port <- assignFreePort env
-            liftM Chan $ liftIO $ newChan "" ("localhost:"++ show port) port 
-evalTerm env (TFun "anonChan" [TNum n] 1) = liftM Chan $ liftIO $ newChan "" ("localhost:"++ show n) n 
+            liftM Chan $ liftIO $ newChan "internal" ("localhost:"++ show port) port 
+evalTerm _   (TFun "anonChan" [TNum n] 1) = liftM Chan $ liftIO $ newChan "internal" ("localhost:"++ show n) n 
 evalTerm env (TFun "httpChan" [TStr addr] 1) = do
             port <- assignFreePort env
             liftM Chan $ liftIO $ newChan "http" (addr ++ ":80") port
 evalTerm env (TFun "chan" [TStr addr,TNum p] 2) = do
             port <- assignFreePort env
-            liftM Chan $ liftIO $ newChan "string" (addr ++ ":" ++ show p) p
+            liftM Chan $ liftIO $ newChan "string" (addr ++ ":" ++ show p) port
 evalTerm env (TFun name args _) = do
             fun <- getVar env name
             argVals <- mapM (evalTerm env) args
@@ -476,7 +468,7 @@ assignFreePort :: Env -> IOThrowsError Integer
 assignFreePort env = do
             Term (TNum port) <- getVar env counterRef
             _ <- setVar env counterRef $ Term $ TNum $ port + 1
-            if port == 2 ^ 16 
+            if port == 2 ^ (16 :: Integer)
                 then error "HOW MANY CHANNELS DO YOU WANT?!" 
                 else return port
 
@@ -486,14 +478,14 @@ apply (PrimitiveFunc fun) args = do
                         ts <- extracTerms args
                         res <- liftThrows $ fun ts
                         return $ Term res
-apply (Func params body closure) args =
-    if num params /= num args 
-        then throwE $ NumArgs "user-defined" (num params) args
+apply (Func parms bdy closre) args =
+    if num parms /= num args 
+        then throwE $ NumArgs "user-defined" (num parms) args
         else do
-             clos <- liftIO (bindVars closure $ zip params args)
-             case body of
+             clos <- liftIO (bindVars closre $ zip parms args)
+             case bdy of
                 Term t -> evalTerm clos t
-                Proc p -> eval clos p >> return body
+                Proc p -> eval clos p >> return bdy
                 _      -> throwE $ Default "this function makes no sense"
     where
         num = toInteger . length
@@ -542,9 +534,6 @@ eval env (Conc procs)  = do
                         res <- runExceptT $ eval env proc
                         _ <- tryPutMVar var res
                         return ()
-                         
-                                        
-
 eval env (p1 `Seq` p2) = do
                 eval env p1
                 eval env p2
@@ -577,10 +566,8 @@ defineLocalFun env name args term p = do
             clos <- liftIO $ bindVars env [(name, makeFun args term env)]
             eval clos p
 
-
 makeFun :: [Term] -> Value -> Env -> Value
 makeFun args = Func (map show args)
-
 
 evalString :: Env -> String -> IO String
 evalString env expr = runIOThrows $ liftM show $ liftThrows (readProgram expr) >>= eval env
@@ -597,8 +584,11 @@ readTerm str = case parse parseTerm "Term" str of
                 Right val -> return val 
 
 evalAndPrint :: Env -> String -> IO ()
-evalAndPrint _   []   = return () 
-evalAndPrint env expr = evalString env expr >>= putStrLn
+evalAndPrint env expr = do
+            res <- evalString env expr 
+            case res of
+                "()"  -> return ()
+                _     -> putStrLn res
 
 runProcess :: IO Env -> String -> IO ()
 runProcess core expr = core >>= flip evalAndPrint expr
@@ -620,7 +610,7 @@ flushStr :: String -> IO ()
 flushStr str = putStr str >> hFlush stdout
 
 sendOut :: Channel -> Value -> IOThrowsError () 
-sendOut chan val = liftIO $ send chan val
+sendOut chan val = liftIO $ send chan $ show val
 
 receiveIn :: Channel -> IOThrowsError Value
 receiveIn chan = do
@@ -632,13 +622,13 @@ receiveIn chan = do
             where
             decodeChannel e = do
                 let extraStrings = map (\(TStr x) -> x) e
-                let extraData = map (second tail . break (==dataBreak) ) extraStrings
+                let extraData = map (second tail . break (==dataBreak)) extraStrings
                 case getChannelData extraData of
                     Just (t,h,p)  -> liftM Chan $ liftIO $ newChan t h p
                     Nothing -> throwE $ Default "incomplete data in channel"
                 
 
-getChannelData :: [(String,String)] -> Maybe (Type,String,Integer)
+getChannelData :: [(String,String)] -> Maybe (Type, String, Integer)
 getChannelData ex = do
         t            <- lookup "type" ex
         host         <- lookup "host" ex
@@ -652,48 +642,9 @@ evalChan env t = do
                 Chan c -> return c
                 _      -> throwE $ NotChannel $ show t
 
-testIO :: IO ()
-testIO = do
-    c <- newChan "" "localhost:9000" 9000
-    send c $ Term $ TBool True
-    receive c >>= print
-
-newChan :: Type -> String -> Integer -> IO Channel
-newChan t host cp = return $ Channel t cp ss rr ex
-    where
-       rr   = N.withSocketsDo $ do    
-            inSock <- N.listenOn $ N.PortNumber $ fromIntegral cp  
-            (inHandle,_,_)  <- N.accept inSock
-            msg <- hGetLine inHandle
-            N.sClose inSock
-            return msg
-            
-       ss v = N.withSocketsDo $ do
-            _ <- forkIO $ do 
-                outHandle <- waitForConnect hostName $ N.PortNumber $ port hostPort 
-                hPrint outHandle v
-            return ()
-                where waitForConnect h p = N.connectTo h p `catchIOError` (\e -> do
-                                                                threadDelay 10000
-                                                                putStrLn "waiting for connection"
-                                                                waitForConnect h p)
-       port = fromIntegral . read
-       (hostName, _:hostPort) = break (==':') host
-       ex = zipWith (\a b -> TStr (a ++ dataBreak : b))  ["host","clientPort","type"] [host,show cp,t]
-                   
-       
-dataBreak :: Char
-dataBreak = '#'
 
 httpGetRequest :: String -> Maybe String
 httpGetRequest str = do
         uri <- parseURI str
         return $ show (mkRequest GET uri :: Request String)
-
-test :: IO ()
-test = do
-    sock <- N.listenOn $ N.PortNumber 80
-    (inHandle,_,_) <- N.accept sock
-    msg <- hGetLine inHandle
-    putStrLn msg
 

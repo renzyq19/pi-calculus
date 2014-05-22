@@ -1,0 +1,2 @@
+let a = () in 
+let b = () in (in(b,chan);out(chan,10)|out(a,b);in(b,msg);out(stdout,msg))
