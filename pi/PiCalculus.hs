@@ -335,14 +335,13 @@ counterRef :: String
 counterRef = "###"
 
 
-
 nativeChannels :: [(String   , Channel)]
-nativeChannels = [ ("stdin"  , stdStrChan stdin) 
-                 , ("0"      , stdStrChan stdin) 
-                 , ("stdout" , stdStrChan stdout)
-                 , ("1"      , stdStrChan stdout)
-                 , ("stderr" , stdStrChan stderr)
-                 , ("2"      , stdStrChan stderr)
+nativeChannels = [ ("stdin"  , stdChan stdin) 
+                 , ("0"      , stdChan stdin) 
+                 , ("stdout" , stdChan stdout)
+                 , ("1"      , stdChan stdout)
+                 , ("stderr" , stdChan stderr)
+                 , ("2"      , stdChan stderr)
                  ]
 
 primitives :: [(String      , TermFun)]

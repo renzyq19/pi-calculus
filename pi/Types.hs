@@ -1,6 +1,7 @@
 module Types where
 
 data ChannelType = Internal
-                 | String
+                 | Std
                  | HTTP
+                 | String
                  deriving (Eq, Show, Read)

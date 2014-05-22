@@ -1,13 +1,13 @@
 module Channel  (
     Channel (..),
-    stdStrChan  ,
+    stdChan     ,
     newChan     ,
     dataBreak   )
     where
 
 import qualified Network as N
 import Network.BSD (getHostName)
-import System.IO (Handle, hGetContents, hGetLine, hPrint, hPutStrLn, hShow)
+import System.IO (Handle, hFlush, hGetLine, hPutStrLn, hShow)
 import System.IO.Error (catchIOError)
 import Control.Concurrent (forkIO,threadDelay)
 import Control.Concurrent.MVar
@@ -22,21 +22,21 @@ data Channel = Channel {
              , extra       :: [String]
              }
 
-stdStrChan :: Handle -> Channel
-stdStrChan h = Channel String (-1) write rd []
+stdChan :: Handle -> Channel
+stdChan h = Channel Std (-1) write rd []
     where
         write = hPutStrLn h
         rd = hGetLine h
 
 newChan :: ChannelType -> String -> Integer -> IO Channel
-newChan t host cp = do {
-            currentHost <- getHostName ;
-            case hostName of 
-            "localhost" 
-                    | t == Internal   -> newInternalChan currentHost hostPort cp
-                    | cp == -1        -> newForeignChan t hostName hostPort 
-                    | otherwise       -> newLocalChan t cp
-            _           -> newForeignChan t hostName hostPort } 
+newChan t host cp = do 
+            currentHost <- getHostName 
+            case t of 
+                Internal -> newInternalChan currentHost hostPort cp 
+                HTTP
+                    | hostName == "localhost" || hostName == currentHost -> newLocalChan t cp
+                    | otherwise               -> newForeignChan t hostName hostPort 
+                String -> newForeignChan t hostName hostPort
                where
                (hostName, _:hostPort) = break (==':') host
 
@@ -64,7 +64,7 @@ newLocalChan t cp = N.withSocketsDo $ do
         (inHandle,_,_)  <- N.accept inSock
         putMVar hanVar inHandle
     currentHost <- getHostName
-    let ex' = ex ++ ["host" ++ dataBreak :currentHost]
+    let ex' = ex ++ ["host" ++ dataBreak :currentHost ++ ":" ++ show cp]
     return $ Channel t cp (send' hanVar) (receive' hanVar) ex'
       where
        ex = zipWith (\a b -> (a ++ dataBreak : b))  ["clientPort","type"] [show cp,show t]
@@ -96,12 +96,15 @@ send' :: MVar Handle -> String -> IO ()
 send' hanVar v = do
         han <- takeMVar hanVar
         hPutStrLn han v
+        hFlush han
         putMVar hanVar han
 
 receive' :: MVar Handle -> IO String
 receive' hanVar = do
         han <- readMVar hanVar
-        hGetLine han
+        msg <- hGetLine han
+        hFlush han
+        return msg
 
 printH :: Handle -> IO ()
 printH h = do
