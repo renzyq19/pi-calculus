@@ -127,7 +127,7 @@ showPi (Let n t p)    = "let " ++ show n ++ " = " ++ show t ++ case p of {Nothin
 
 showTerm :: Term -> String
 showTerm (TVar x)   = x
-showTerm (TStr str) = show str
+showTerm (TStr str) = "\"" ++ str ++ "\""
 showTerm (TNum num) = show num
 showTerm (TBool b ) = map toLower $ show b
 showTerm (TPair (a,b)) = "pair("++ show a ++ ","++ show b ++ ")"
