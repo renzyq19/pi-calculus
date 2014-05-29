@@ -10,6 +10,7 @@ license-file:        LICENSE
 author:              Will de Renzy-Martin
 maintainer:          will.derenzymartin@gmail.com
 -- copyright:           
+homepage:            https://github.com/renzyq19/pi-calculus
 category:            Web
 build-type:          Simple
 cabal-version:       >=1.8
