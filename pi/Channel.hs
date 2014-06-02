@@ -108,7 +108,9 @@ send' hanVar v = do
 receive' :: MVar Handle -> IO String
 receive' hanVar = do
         han <- readMVar hanVar
-        emptyHandle han
+        msg <- emptyHandle han
+        printH han
+        return msg
 
 emptyHandle :: Handle -> IO String
 emptyHandle h = do

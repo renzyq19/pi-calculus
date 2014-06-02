@@ -10,7 +10,8 @@ main = do
     let req = fromJust $ httpGetRequest "http://www.google.com/index.html"
     send c req 
     msg <- receive c
-    putStrLn msg
+    print $ length msg
+    print $ lines msg
     case parseResponseHead (lines msg) of
         Left _ -> error "no parse"
         Right rsp -> print rsp
