@@ -57,6 +57,11 @@ data PiError = NumArgs Name Integer [Value]
              | NotChannel String
              | Default String
 
+data Type = Str
+          | HTTPResp
+          | HTTPReq
+          | Channel Type
+
 type IOThrowsError = ExceptT PiError IO 
 type ThrowsError   = Either  PiError
 
@@ -559,6 +564,7 @@ defineGlobalFun :: Env -> String -> [Term] -> Value -> IOThrowsError ()
 defineGlobalFun env name args term = do
             _ <- defineVar env name $ makeFun args term env
             return ()
+
 defineLocalFun :: Env -> String -> [Term] -> Value -> PiProcess -> IOThrowsError ()
 defineLocalFun env name args term p = do
             clos <- liftIO $ bindVars env [(name, makeFun args term env)]

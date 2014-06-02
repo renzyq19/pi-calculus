@@ -6,12 +6,13 @@ module Channel  (
     dataBreak      )
     where
 
-import qualified Network as N
-import Network.BSD (getHostName)
-import System.IO (Handle, hFlush, hGetLine, hPutStrLn, hShow)
-import System.IO.Error (catchIOError)
 import Control.Concurrent (forkIO,threadDelay)
 import Control.Concurrent.MVar
+import Network.BSD (getHostName)
+import qualified Network as N
+import System.IO (Handle, hFlush,hGetContents, hGetLine, hPutStrLn, hShow)
+import System.IO.Error (catchIOError)
+import GHC.IO.Handle (hDuplicate)
 
 data Channel = Channel {
                chanType    :: ChannelType
@@ -41,7 +42,7 @@ newChan t host cp = do
                 HTTP
                     | hostName == "localhost" || hostName == currentHost -> newLocalChan t cp
                     | otherwise               -> newForeignChan t hostName hostPort 
-                String -> newForeignChan t hostName hostPort
+                _        -> newForeignChan t hostName hostPort
                where
                (hostName, _:hostPort) = break (==':') host
 
@@ -107,11 +108,12 @@ send' hanVar v = do
 receive' :: MVar Handle -> IO String
 receive' hanVar = do
         han <- readMVar hanVar
-        msg <- hGetLine han
-        hFlush han
-        return msg
+        emptyHandle han
+
+emptyHandle :: Handle -> IO String
+emptyHandle h = do
+    h1 <- hDuplicate h
+    hGetContents h1
 
 printH :: Handle -> IO ()
-printH h = do
-   hstr <- hShow h
-   putStrLn hstr
+printH h = hShow h >>= putStrLn 
