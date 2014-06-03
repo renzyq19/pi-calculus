@@ -6,13 +6,14 @@ module Channel  (
     dataBreak      )
     where
 
+import Control.Applicative ((<$>))
 import Control.Concurrent (forkIO,threadDelay)
 import Control.Concurrent.MVar
 import Network.BSD (getHostName)
+import qualified Data.ByteString.Char8 as C
 import qualified Network as N
-import System.IO (Handle, hFlush,hGetContents, hGetLine, hPutStrLn, hShow)
+import System.IO --  (Handle, hFlush, hGetLine, hPutStrLn, hShow)
 import System.IO.Error (catchIOError)
-import GHC.IO.Handle (hDuplicate)
 
 data Channel = Channel {
                chanType    :: ChannelType
@@ -70,7 +71,7 @@ newLocalChan t cp = N.withSocketsDo $ do
         (inHandle,_,_)  <- N.accept inSock
         putMVar hanVar inHandle
     currentHost <- getHostName
-    let ex' = ex ++ ["host" ++ dataBreak :currentHost ++ ":" ++ show cp]
+    let ex' = ex ++ ["host" ++ dataBreak : currentHost ++ ":" ++ show cp]
     return $ Channel t cp (send' hanVar) (receive' hanVar) ex'
       where
        ex = zipWith (\a b -> (a ++ dataBreak : b))  ["clientPort","type"] [show cp,show t]
@@ -99,23 +100,28 @@ waitForConnect h p = N.connectTo h p `catchIOError`
                                         waitForConnect h p)
 
 send' :: MVar Handle -> String -> IO ()
-send' hanVar v = do
+send' hanVar msg = do
         han <- takeMVar hanVar
-        hPutStrLn han v
+        C.hPutStrLn han $ C.pack msg
         hFlush han
         putMVar hanVar han
 
 receive' :: MVar Handle -> IO String
 receive' hanVar = do
         han <- readMVar hanVar
-        msg <- emptyHandle han
-        printH han
-        return msg
+        unlines <$> emptyHandle han
 
-emptyHandle :: Handle -> IO String
+emptyHandle :: Handle -> IO [String]
 emptyHandle h = do
-    h1 <- hDuplicate h
-    hGetContents h1
+    line <- hGetLine h
+    more <- hReady h
+    if not more
+        then return []
+        else (line:) <$> emptyHandle h
+    
 
 printH :: Handle -> IO ()
-printH h = hShow h >>= putStrLn 
+printH h = do
+    hShow h >>= putStrLn 
+    hReady h >>= print
+

@@ -3,6 +3,7 @@ import Network.URI
 import Data.Maybe
 import Channel
 import Control.Monad
+
  
 main :: IO ()
 main = do
@@ -10,8 +11,12 @@ main = do
     let req = fromJust $ httpGetRequest "http://www.google.com/index.html"
     send c req 
     msg <- receive c
-    print $ length msg
-    print $ lines msg
+    case parseResponseHead (lines msg) of
+        Left _ -> error "no parse"
+        Right rsp -> print rsp
+    let req = fromJust $ httpGetRequest "http://www.google.com/index.html"
+    send c req 
+    msg <- receive c
     case parseResponseHead (lines msg) of
         Left _ -> error "no parse"
         Right rsp -> print rsp
@@ -26,9 +31,3 @@ receiveHttp :: Channel -> IO [String]
 receiveHttp c = do
         l <- receive c
         liftM (l :) $ receiveHttp c
-
-
-    
-    
-
-    
