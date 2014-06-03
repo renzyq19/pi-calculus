@@ -12,7 +12,7 @@ import Control.Concurrent.MVar
 import Network.BSD (getHostName)
 import qualified Data.ByteString.Char8 as C
 import qualified Network as N
-import System.IO --  (Handle, hFlush, hGetLine, hPutStrLn, hShow)
+import System.IO (Handle, hFlush, hGetLine, hPutStrLn, hReady)
 import System.IO.Error (catchIOError)
 
 data Channel = Channel {
@@ -118,10 +118,3 @@ emptyHandle h = do
     if not more
         then return []
         else (line:) <$> emptyHandle h
-    
-
-printH :: Handle -> IO ()
-printH h = do
-    hShow h >>= putStrLn 
-    hReady h >>= print
-
