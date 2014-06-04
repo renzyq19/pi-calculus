@@ -1,25 +1,20 @@
 import Network.HTTP
 import Network.URI
-import Data.Maybe
+import Network
 import Channel
+import System.IO
 import Control.Monad
+import Control.Concurrent
 
  
 main :: IO ()
 main = do
-    c <- newChan HTTP "www.google.com:80" 8000 
-    let req = fromJust $ httpGetRequest "http://www.google.com/index.html"
-    send c req 
-    msg <- receive c
-    case parseResponseHead (lines msg) of
-        Left _ -> error "no parse"
-        Right rsp -> print rsp
-    let req = fromJust $ httpGetRequest "http://www.google.com/index.html"
-    send c req 
-    msg <- receive c
-    case parseResponseHead (lines msg) of
-        Left _ -> error "no parse"
-        Right rsp -> print rsp
+    _ <- forkIO $ do
+        s <- listenOn $ PortNumber 9000
+        (_,_,_) <- accept s
+        sClose s
+    h <- connectTo "localhost" (PortNumber 9000)
+    hShow h >>= putStrLn
     return ()
 
 httpGetRequest :: String -> Maybe String

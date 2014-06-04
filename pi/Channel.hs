@@ -10,9 +10,8 @@ import Control.Applicative ((<$>))
 import Control.Concurrent (forkIO,threadDelay)
 import Control.Concurrent.MVar
 import Network.BSD (getHostName)
-import qualified Data.ByteString.Char8 as C
 import qualified Network as N
-import System.IO (Handle, hFlush, hGetLine, hPutStrLn, hReady)
+import System.IO (Handle, hFlush, hGetLine, hPutStr, hReady)
 import System.IO.Error (catchIOError)
 
 data Channel = Channel {
@@ -32,18 +31,18 @@ data ChannelType = Internal
 stdChan :: Handle -> Channel
 stdChan h = Channel Std (-1) write rd []
     where
-        write = hPutStrLn h
-        rd = hGetLine h
+        write = hPutStr h
+        rd = unlines <$> emptyHandle h
 
 newChan :: ChannelType -> String -> Integer -> IO Channel
-newChan t host cp = do 
-            currentHost <- getHostName 
-            case t of 
-                Internal -> newInternalChan currentHost hostPort cp 
+newChan t host cp = do
+            currentHost <- getHostName
+            case t of
+                Internal -> newInternalChan currentHost hostPort cp
                 HTTP
                     | hostName == "localhost" || hostName == currentHost -> newLocalChan t cp
-                    | otherwise               -> newForeignChan t hostName hostPort 
-                _        -> newForeignChan t hostName hostPort
+                    | otherwise               -> newForeignChan t hostName hostPort
+                _                             -> newForeignChan t hostName hostPort
                where
                (hostName, _:hostPort) = break (==':') host
 
@@ -51,30 +50,30 @@ newInternalChan :: String -> String -> Integer -> IO Channel
 newInternalChan hostName hostPort cp = return $ Channel Internal cp s r ex
     where
        r   = N.withSocketsDo $ do
-            inSock <- N.listenOn $ N.PortNumber $ fromIntegral cp
-            (inHandle,_,_) <- N.accept inSock
-            msg <- hGetLine inHandle
-            N.sClose inSock
+            sock <- N.listenOn $ N.PortNumber $ fromIntegral cp
+            (inHandle,_,_) <- N.accept sock
+            msg <- unlines <$> emptyHandle inHandle
+            N.sClose sock
             return msg
        s v = N.withSocketsDo $ do
             _ <- forkIO $ do
                 outHandle <- waitForConnect hostName $ N.PortNumber $ port hostPort
-                hPutStrLn outHandle v
+                hPutStr outHandle v
             return ()
-       ex = zipWith (\a b -> (a ++ dataBreak : b))  ["host","clientPort","type"] [hostName ++ ":" ++ hostPort,show cp,show Internal]
+       ex = makeExtra ["host","clientPort","type"] [hostName ++ ":" ++ hostPort,show cp,show HTTP]
+
 
 newLocalChan :: ChannelType -> Integer -> IO Channel
 newLocalChan t cp = N.withSocketsDo $ do
     hanVar <- newEmptyMVar
     _ <- forkIO $ do
-        inSock <- N.listenOn $ N.PortNumber $ fromIntegral cp
-        (inHandle,_,_)  <- N.accept inSock
+        sock <- N.listenOn $ N.PortNumber $ fromIntegral cp
+        (inHandle,_,_)  <- N.accept sock
         putMVar hanVar inHandle
     currentHost <- getHostName
-    let ex' = ex ++ ["host" ++ dataBreak : currentHost ++ ":" ++ show cp]
+    let ex  = makeExtra ["clientPort","type"] [show cp,show t]
+    let ex' = ex ++ makeExtra ["host"] [currentHost ++ ":" ++ show cp]
     return $ Channel t cp (send' hanVar) (receive' hanVar) ex'
-      where
-       ex = zipWith (\a b -> (a ++ dataBreak : b))  ["clientPort","type"] [show cp,show t]
 
 newForeignChan :: ChannelType -> String -> String -> IO Channel
 newForeignChan t hostName hostPort = N.withSocketsDo $ do
@@ -84,13 +83,7 @@ newForeignChan t hostName hostPort = N.withSocketsDo $ do
         putMVar hanVar outHandle
     return $ Channel t 0 (send' hanVar) (receive' hanVar) ex
     where
-       ex = zipWith (\a b -> a ++ dataBreak : b)  ["host","clientPort","type"] [hostName ++ ":" ++ hostPort,"-1",show t]
-
-port :: String -> N.PortNumber
-port s = fromIntegral  (read s :: Integer)
-
-dataBreak :: Char
-dataBreak = '#'
+       ex = makeExtra ["host","clientPort","type"] [hostName ++ ":" ++ hostPort,"-1",show t]
 
 waitForConnect :: N.HostName -> N.PortID -> IO Handle
 waitForConnect h p = N.connectTo h p `catchIOError`
@@ -102,7 +95,7 @@ waitForConnect h p = N.connectTo h p `catchIOError`
 send' :: MVar Handle -> String -> IO ()
 send' hanVar msg = do
         han <- takeMVar hanVar
-        C.hPutStrLn han $ C.pack msg
+        hPutStr han msg
         hFlush han
         putMVar hanVar han
 
@@ -118,3 +111,12 @@ emptyHandle h = do
     if not more
         then return []
         else (line:) <$> emptyHandle h
+
+port :: String -> N.PortNumber
+port s = fromIntegral (read s :: Integer)
+
+dataBreak :: Char
+dataBreak = '#'
+
+makeExtra :: [String] -> [String] -> [String]
+makeExtra = zipWith (\a b -> (a ++ dataBreak : b))
