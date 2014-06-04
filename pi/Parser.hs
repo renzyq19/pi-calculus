@@ -1,7 +1,6 @@
 module Parser (
         parseTerm,
-        parseProcess,
-        parse)
+        parseProcess)
         where
 
 import Control.Monad (liftM)
@@ -86,6 +85,9 @@ parseLet = do
                 return $ Just proc) <|> return Nothing
             return $ Let name val p
 
+parseAtom :: Parser PiProcess
+parseAtom = liftM Atom parseTerm
+
 parseCondition :: Parser Condition
 parseCondition = do
             t1 <- parseTerm
@@ -158,6 +160,7 @@ parseProcess = liftM Conc $ sepBy parseProcess' (paddedChar '|')
                  <|> parseReplicate
                  <|> parseNew
                  <|> parseLet
+                 <|> parseAtom
 
 bracketed :: Parser a -> Parser a
 bracketed parser = do

@@ -31,6 +31,7 @@ data PiProcess = Null
                | Replicate PiProcess         -- Infinite parallel replication
                | Let Term Value (Maybe PiProcess)
                | If Condition PiProcess PiProcess
+               | Atom Term
                  deriving (Eq)
 
 data Term = TVar Name
@@ -62,6 +63,7 @@ data PiError = NumArgs Name Integer [Value]
              | NotTerm Name Value
              | NotFunction String String
              | NotChannel String
+             | NotProcess String
              | Default String
 
 instance Show PiError where show = showError
@@ -70,6 +72,7 @@ showError :: PiError -> String
 showError (UnboundVar message var)      = message ++ ": " ++ var
 showError (NotFunction message fun)     = message ++ ": " ++ fun
 showError (NotChannel chan)             = "Not a channel: " ++ chan 
+showError (NotProcess proc)             = "Not a Process: " ++ proc
 showError (NotTerm name var)            = "Expecting " ++ name ++ " to be a Term, found: " ++ show var
 showError (NumArgs name expected found) = "Expected " ++ show name ++ show expected ++ " args; found values "
                                           ++ unwordsList found
@@ -130,6 +133,7 @@ showPi (New n)   = "new " ++ show n
 showPi (If c p1 Null) = "if " ++ show c ++ " then " ++ show p1 
 showPi (If c p1 p2)   = "if " ++ show c ++ " then " ++ show p1 ++ " else " ++ show p2
 showPi (Let n t p)    = "let " ++ show n ++ " = " ++ show t ++ case p of {Nothing -> "" ; Just x -> " in\n" ++ show x}
+showPi (Atom t)       = show t
 
 showTerm :: Term -> String
 showTerm (TVar x)   = x

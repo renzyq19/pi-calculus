@@ -13,6 +13,7 @@ import Network.HTTP.Base (Request(..), RequestMethod(..), mkRequest)
 import Network.URI (parseURI)
 import System.Environment (getArgs, getProgName)
 import System.IO (hFlush, stderr, stdin, stdout)
+import Text.ParserCombinators.Parsec (Parser, endBy, parse, many1, newline)
 
 import qualified Data.Map as Map
 
@@ -159,11 +160,20 @@ main = do
                     putStrLn $ name ++ " -- Enter the REPL"
                     putStrLn $ name ++ " [process] -- Run single process"
         
-readProgram :: String ->  ThrowsError PiProcess
-readProgram input = case parse parseProcess "pi-calculus" input of
+readProcess :: String -> ThrowsError PiProcess
+readProcess = readOrThrow parseProcess 
+
+readProcessList :: String -> ThrowsError [PiProcess]
+readProcessList = readOrThrow (endBy parseProcess (many1 newline))
+
+readOrThrow :: Parser a -> String ->  ThrowsError a
+readOrThrow parser input = case parse parser "pi-calculus" input of
                         Left  err -> throwError $ Parser err
                         Right val -> return val 
 
+load :: String -> IOThrowsError [PiProcess]
+load filename = liftIO (readFile filename) >>= liftThrows . readProcessList
+                        
 evalCond :: Env -> Condition -> IOThrowsError Bool
 evalCond env (t1 `Equals` t2) = liftM2 (==) (evalTerm env t1) (evalTerm env t2)
 
@@ -185,9 +195,6 @@ evalTerm _   (TFun "anonChan" [TNum n] 1) = liftM Chan $ liftIO $ newChan Intern
 evalTerm env (TFun "httpChan" [TStr addr] 1) = do
             port <- assignFreePort env
             liftM Chan $ liftIO $ newChan HTTP (addr ++ ":80") port
-evalTerm env (TFun "chan" [TStr addr,TNum p] 2) = do
-            port <- assignFreePort env
-            liftM Chan $ liftIO $ newChan String (addr ++ ":" ++ show p) port
 evalTerm env (TFun name args _) = do
             fun <- getVar env name
             argVals <- mapM (evalTerm env) args
@@ -285,6 +292,12 @@ eval env (Let (TFun name args _) t2 (Just p)) =
             defineLocalFun env name args t2 p
 eval env (Let (TFun name args _) t2 Nothing)  = 
             defineGlobalFun env name args t2
+eval env (Atom (TFun "load" [TStr file] 1)) = do
+            procs <- load file  
+            eval env $ foldl Seq Null procs
+eval env (Atom p)  = do
+            proc <- evalProcess env p
+            eval env proc
 eval _ _ = throwE $ Default "undefined action"
 
 defineGlobalFun :: Env -> String -> [Term] -> Value -> IOThrowsError ()
@@ -301,7 +314,7 @@ makeFun :: [Term] -> Value -> Env -> Value
 makeFun args = Func (map show args)
 
 evalString :: Env -> String -> IO String
-evalString env expr = runIOThrows $ liftM show $ liftThrows (readProgram expr) >>= eval env
+evalString env expr = runIOThrows $ liftM show $ liftThrows (readProcess expr) >>= eval env
 
 runIOThrows :: IOThrowsError String -> IO String
 runIOThrows action = liftM extractValue $ runExceptT (trapError action)
@@ -357,7 +370,6 @@ receiveIn chan = do
                 case getChannelData extraData of
                     Just (t,h,p)  -> liftM Chan $ liftIO $ newChan t h p
                     Nothing -> throwE $ Default "incomplete data in channel"
-                
 
 getChannelData :: [(String,String)] -> Maybe (ChannelType, String, Integer)
 getChannelData ex = do
@@ -373,7 +385,13 @@ evalChan env t = do
                 Chan c -> return c
                 _      -> throwE $ NotChannel $ show t
 
-
+evalProcess :: Env -> Term -> IOThrowsError PiProcess
+evalProcess env t = do
+            proc <- evalTerm env t
+            case proc of
+                Proc p -> return p
+                _      -> throwE $ NotProcess $ show t
+                
 httpGetRequest :: String -> Maybe String
 httpGetRequest str = do
         uri <- parseURI str
