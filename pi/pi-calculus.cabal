@@ -2,7 +2,7 @@
 -- documentation, see http://haskell.org/cabal/users-guide/
 
 name:                pi-calculus
-version:             0.0.1
+version:             0.0.2
 synopsis:            Applied pi-calculus compiler
 description:         Phi - A compiler for the applied pi-calculus. Very rough around the edges.
 license:             GPL-3
