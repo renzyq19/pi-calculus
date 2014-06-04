@@ -1,4 +1,3 @@
-{-# LANGUAGE TupleSections #-}
 module Main where
 
 import Control.Arrow (second)
@@ -7,68 +6,19 @@ import Control.Concurrent.MVar (newEmptyMVar, takeMVar, tryPutMVar)
 import Control.Monad (liftM, liftM2, unless)
 import Control.Monad.Error (throwError)
 import Control.Monad.Trans (liftIO)
-import Control.Monad.Trans.Except (ExceptT(..), catchE, runExceptT, throwE)
-import Data.Char (toLower)
-import Data.IORef (IORef, newIORef, readIORef,writeIORef)
-import Data.List (intercalate)
+import Control.Monad.Trans.Except (catchE, runExceptT, throwE)
+import Data.IORef (newIORef, readIORef,writeIORef)
 import Data.Maybe (isJust)
 import Network.HTTP.Base (Request(..), RequestMethod(..), mkRequest)
 import Network.URI (parseURI)
 import System.Environment (getArgs, getProgName)
 import System.IO (hFlush, stderr, stdin, stdout)
-import Text.ParserCombinators.Parsec
 
-import Data.Map (Map)
 import qualified Data.Map as Map
 
 import Channel
-
-data PiProcess = Null
-               | In   Term Term
-               | Out  Term Term
-               | New  Term
-               | PiProcess `Seq`   PiProcess -- Sequential Composition
-               | Conc [PiProcess]            -- Parallel   Composition
-               | Replicate PiProcess         -- Infinite parallel replication
-               | Let Term Value (Maybe PiProcess)
-               | If Condition PiProcess PiProcess
-                 deriving (Eq,Show)
-
-data Term = TVar Name 
-          | TStr String
-          | TNum Integer
-          | TBool Bool
-          | TPair (Term, Term)
-          | TFun Name [Term] Int
-            deriving (Eq)
-
-data Value = Proc PiProcess 
-           | Term Term
-           | Chan Channel
-           | PrimitiveFunc TermFun
-           | Func {params :: [String] , body :: Value, closure :: Env}
-
-data PiError = NumArgs Name Integer [Value]
-             | TypeMismatch String [Value]
-             | Parser ParseError
-             | UnboundVar String String
-             | NotTerm Name Value
-             | NotFunction String String
-             | NotChannel String
-             | Default String
-
-data Type = Str
-          | HTTPResp
-          | HTTPReq
-          | Channel Type
-
-type IOThrowsError = ExceptT PiError IO 
-type ThrowsError   = Either  PiError
-
-type Name      = String
-data Condition = Term `Equals` Term deriving (Eq)
-
-type Env = IORef (Map String Value)
+import Parser
+import TypDefs
 
 nullEnv :: IO Env
 nullEnv = newIORef Map.empty
@@ -98,229 +48,6 @@ defineVar envRef var val = do
             env      <- readIORef envRef
             writeIORef envRef $ Map.insert var val env
             return val
-
-showValue :: Value -> String
-showValue (Proc p)  = show p
-showValue (Term t)  = show t
-showValue (Chan c)  = show $ convert c
-    where 
-        convert ch = TFun "<chan>" (map TStr ex) $ length ex
-            where ex = extra ch
-showValue (PrimitiveFunc _)  = "<primitive>" 
-showValue (Func {})          = "<user function>"  
-
-eqvVal :: Value -> Value -> Bool
-eqvVal (Proc p1)  (Proc p2) = p1 == p2
-eqvVal (Term t1)  (Term t2) = t1 == t2
-eqvVal _ _ = False
-
-instance Eq Value where (==) = eqvVal
-
-showPi :: PiProcess -> String
-showPi Null = "0"
-showPi (In c m) =  "in(" ++ show c ++ "," ++ show m ++ ")"
-showPi (Out c m) =  "out(" ++ show c ++ "," ++  show m ++ ")"
-showPi (Replicate proc) =  "!(" ++ show proc ++ ")"
-showPi (Conc procs) = intercalate "|" $ map show procs 
-showPi (p1 `Seq` Null) = show p1
-showPi (p1 `Seq` p2) = show p1 ++ ";" ++ show p2 
-showPi (New n)   = "new " ++ show n
-showPi (If c p1 Null) = "if " ++ show c ++ " then " ++ show p1 
-showPi (If c p1 p2)   = "if " ++ show c ++ " then " ++ show p1 ++ " else " ++ show p2
-showPi (Let n t p)    = "let " ++ show n ++ " = " ++ show t ++ case p of {Nothing -> "" ; Just x -> " in\n" ++ show x}
-
-showTerm :: Term -> String
-showTerm (TVar x)   = x
-showTerm (TStr str) = "\"" ++ str ++ "\""
-showTerm (TNum num) = show num
-showTerm (TBool b ) = map toLower $ show b
-showTerm (TPair (a,b)) = "pair("++ show a ++ ","++ show b ++ ")"
-showTerm (TFun n ts _ ) = n ++ "(" ++ intercalate "," (map show ts) ++ ")"
-
-showCond :: Condition -> String
-showCond (t1 `Equals` t2) = show t1 ++ " == " ++ show t2
-
-showError :: PiError -> String
-showError (UnboundVar message var)      = message ++ ": " ++ var
-showError (NotFunction message fun)     = message ++ ": " ++ fun
-showError (NotChannel chan)             = "Not a channel: " ++ chan 
-showError (NotTerm name var)            = "Expecting " ++ name ++ " to be a Term, found: " ++ show var
-showError (NumArgs name expected found) = "Expected " ++ show name ++ show expected ++ " args; found values "
-                                          ++ unwordsList found
-showError (TypeMismatch expected found) = "Invalid type: expected " ++ expected ++ ", found "
-                                          ++ show found
-showError (Parser parseErr)             = "Parse error at " ++ show parseErr
-showError (Default msg)                 = msg
-
---instance Show PiProcess where show = showPi
-instance Show Term      where show = showTerm
-instance Show Condition where show = showCond
-instance Show Value     where show = showValue
-instance Show PiError   where show = showError
-
-unwordsList :: [Value] -> String
-unwordsList = unwords . map show
-
-parseNull :: Parser PiProcess
-parseNull = do
-            paddedChar '0'
-            return Null
-
-parseIn :: Parser PiProcess
-parseIn = do
-            _ <- string "in("
-            name <- parseTerm
-            paddedComma
-            var  <- parseTerm
-            _ <- char ')'
-            parseSeq $ In name var 
-
-parseOut :: Parser PiProcess
-parseOut = do
-            _ <- string "out("
-            name <- parseTerm
-            paddedComma
-            term  <- parseTerm
-            _ <- char ')'
-            parseSeq $ Out name term 
-
-parseReplicate :: Parser PiProcess
-parseReplicate = do
-            _ <- string "!("
-            process <- parseProcess
-            _ <- char ')'
-            return $ Replicate process
-
-paddedChar :: Char ->  Parser ()
-paddedChar ch = do
-            spaces
-            _ <- char ch
-            spaces
-
-paddedStr :: String -> Parser ()
-paddedStr str = do
-            spaces
-            _ <- string str
-            spaces
-
-parseSeq :: PiProcess -> Parser PiProcess
-parseSeq p1 = do
-            p2 <- try (do {paddedChar ';' ; parseProcess}) <|> return Null
-            return $ p1 `Seq` p2
-
-parseNew :: Parser PiProcess
-parseNew = do
-            _ <- string "new"
-            spaces
-            name <- parseTerm
-            parseSeq $ New name
-
-parseIf :: Parser PiProcess
-parseIf = do
-            _ <- string "if" 
-            spaces
-            cond <- parseCondition
-            paddedStr "then"
-            p1 <- parseProcess
-            p2 <- try (do {paddedStr "else" ; parseProcess}) <|> return Null
-            return $ If cond p1 p2
-
-parseLet :: Parser PiProcess
-parseLet = do
-            _ <- string "let"
-            spaces
-            name <- parseTerm
-            paddedChar '='
-            val <- liftM Term parseTerm <|> liftM Proc parseProcess
-            p <- try (do 
-                paddedStr "in"
-                proc <- parseProcess
-                return $ Just proc) <|> return Nothing
-            return $ Let name val p
-
-parseCondition :: Parser Condition
-parseCondition = do
-            t1 <- parseTerm
-            paddedChar '='
-            t2 <- parseTerm
-            return $ t1 `Equals` t2
-
-parseTVar :: Parser Term
-parseTVar = do
-        v <- readVar
-        return $ case v of
-            "true"  -> TBool True
-            "false" -> TBool False
-            _       -> TVar v
-
-parseTFun :: Parser Term
-parseTFun = do
-            name <- readVar
-            spaces
-            args <- bracketed $ sepBy parseTerm paddedComma
-            return $ case (name,args) of
-                ("pair", t1:t2:_)  -> TPair  (t1,t2)
-                _                  -> TFun name args (length args) 
-
-parseTStr :: Parser Term
-parseTStr = do
-        _ <- char '"'
-        x <- many $ noneOf "\""
-        _ <- char '"'
-        return $ TStr x
-
-parseTNum :: Parser Term
-parseTNum = liftM (TNum . read) (many1 digit)
-        
-readVar :: Parser Name
-readVar = do
-        frst <- letter <|> symbol
-        rest <- many $ letter <|> digit <|> symbol
-        return $ frst:rest
-
-symbol :: Parser Char
-symbol = oneOf "'._<>"
-
-paddedComma :: Parser ()
-paddedComma = paddedChar ','
-
-parseTerm :: Parser Term
-parseTerm =  try parseAnonChan
-         <|> try parseTFun
-         <|> parseTNum
-         <|> parseTVar
-         <|> parseTStr
-         where
-            parseAnonChan = do
-                paddedChar '('
-                arg <- many digit
-                paddedChar ')'
-                case arg of
-                    [] -> return $ TFun "anonChan" [] 0
-                    _  -> return $ TFun "anonChan" [TNum (read arg)] 1
-
-parseProcess :: Parser PiProcess
-parseProcess = liftM Conc $ sepBy parseProcess' (paddedChar '|')
-    where
-    parseProcess'  = bracketed parseProcess'' <|> parseProcess''
-    parseProcess'' = parseNull 
-                 <|> try parseIf
-                 <|> parseIn 
-                 <|> parseOut
-                 <|> parseReplicate
-                 <|> parseNew
-                 <|> parseLet
-
-bracketed :: Parser a -> Parser a
-bracketed parser = do
-                    _ <- char '('
-                    spaces
-                    res <- parser
-                    spaces
-                    _ <- char ')'
-                    return res
-
-type TermFun = [Term] -> ThrowsError Term
 
 bindVars :: Env -> [(String , Value)] -> IO Env
 bindVars envRef bindings = do
@@ -651,4 +378,3 @@ httpGetRequest :: String -> Maybe String
 httpGetRequest str = do
         uri <- parseURI str
         return $ show (mkRequest GET uri :: Request String)
-

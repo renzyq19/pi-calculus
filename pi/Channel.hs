@@ -1,6 +1,4 @@
 module Channel  (
-    Channel (..)   ,
-    ChannelType(..),
     stdChan        ,
     newChan        ,
     dataBreak      )
@@ -14,18 +12,7 @@ import qualified Network as N
 import System.IO (Handle, hFlush, hGetLine, hPutStr, hReady)
 import System.IO.Error (catchIOError)
 
-data Channel = Channel {
-               send         :: String -> IO ()
-             , receive      :: IO String
-             , serialisable :: Bool 
-             , extra        :: [String]
-             }
-
-data ChannelType = Internal
-                 | Std
-                 | HTTP
-                 | String
-                 deriving (Eq, Show, Read)
+import TypDefs (Channel (..), ChannelType (..))
 
 stdChan :: Handle -> Channel
 stdChan h = Channel write rd False []
