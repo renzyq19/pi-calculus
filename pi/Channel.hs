@@ -15,11 +15,10 @@ import System.IO (Handle, hFlush, hGetLine, hPutStr, hReady)
 import System.IO.Error (catchIOError)
 
 data Channel = Channel {
-               chanType    :: ChannelType
-             , clientPort  :: Integer
-             , send        :: String -> IO ()
-             , receive     :: IO String
-             , extra       :: [String]
+               send         :: String -> IO ()
+             , receive      :: IO String
+             , serialisable :: Bool 
+             , extra        :: [String]
              }
 
 data ChannelType = Internal
@@ -29,7 +28,7 @@ data ChannelType = Internal
                  deriving (Eq, Show, Read)
 
 stdChan :: Handle -> Channel
-stdChan h = Channel Std (-1) write rd []
+stdChan h = Channel write rd False []
     where
         write = hPutStr h
         rd = unlines <$> emptyHandle h
@@ -40,14 +39,14 @@ newChan t host cp = do
             case t of
                 Internal -> newInternalChan currentHost hostPort cp
                 HTTP
-                    | hostName == "localhost" || hostName == currentHost -> newLocalChan t cp
-                    | otherwise               -> newForeignChan t hostName hostPort
-                _                             -> newForeignChan t hostName hostPort
+                    | hostName == "localhost" || hostName == currentHost -> newChanServer t cp
+                    | otherwise               -> newChanClient t hostName hostPort
+                _                             -> newChanClient t hostName hostPort
                where
                (hostName, _:hostPort) = break (==':') host
 
 newInternalChan :: String -> String -> Integer -> IO Channel
-newInternalChan hostName hostPort cp = return $ Channel Internal cp s r ex
+newInternalChan hostName hostPort cp = return $ Channel s r True ex
     where
        r   = N.withSocketsDo $ do
             sock <- N.listenOn $ N.PortNumber $ fromIntegral cp
@@ -63,8 +62,8 @@ newInternalChan hostName hostPort cp = return $ Channel Internal cp s r ex
        ex = makeExtra ["host","clientPort","type"] [hostName ++ ":" ++ hostPort,show cp,show HTTP]
 
 
-newLocalChan :: ChannelType -> Integer -> IO Channel
-newLocalChan t cp = N.withSocketsDo $ do
+newChanServer :: ChannelType -> Integer -> IO Channel
+newChanServer t cp = N.withSocketsDo $ do
     hanVar <- newEmptyMVar
     _ <- forkIO $ do
         sock <- N.listenOn $ N.PortNumber $ fromIntegral cp
@@ -73,15 +72,15 @@ newLocalChan t cp = N.withSocketsDo $ do
     currentHost <- getHostName
     let ex  = makeExtra ["clientPort","type"] [show cp,show t]
     let ex' = ex ++ makeExtra ["host"] [currentHost ++ ":" ++ show cp]
-    return $ Channel t cp (send' hanVar) (receive' hanVar) ex'
+    return $ Channel (send' hanVar) (receive' hanVar) True ex'
 
-newForeignChan :: ChannelType -> String -> String -> IO Channel
-newForeignChan t hostName hostPort = N.withSocketsDo $ do
+newChanClient :: ChannelType -> String -> String -> IO Channel
+newChanClient t hostName hostPort = N.withSocketsDo $ do
     hanVar <- newEmptyMVar
     _ <- forkIO $ do
         outHandle <- waitForConnect hostName $ N.PortNumber $ port hostPort
         putMVar hanVar outHandle
-    return $ Channel t 0 (send' hanVar) (receive' hanVar) ex
+    return $ Channel (send' hanVar) (receive' hanVar) True ex
     where
        ex = makeExtra ["host","clientPort","type"] [hostName ++ ":" ++ hostPort,"-1",show t]
 
