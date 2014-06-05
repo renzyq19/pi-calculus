@@ -9,7 +9,7 @@ import Control.Concurrent (forkIO,threadDelay)
 import Control.Concurrent.MVar
 import Network.BSD (getHostName)
 import qualified Network as N
-import System.IO (Handle, hFlush, hGetLine, hPutStr, hReady)
+import System.IO (Handle, hFlush, hGetLine, hPutStr, hPutStrLn, hReady)
 import System.IO.Error (catchIOError)
 
 import TypDefs (Channel (..), ChannelType (..))
@@ -17,7 +17,7 @@ import TypDefs (Channel (..), ChannelType (..))
 stdChan :: Handle -> Channel
 stdChan h = Channel write rd False []
     where
-        write = hPutStr h
+        write = hPutStrLn h
         rd = unlines <$> emptyHandle h
 
 newChan :: ChannelType -> String -> Integer -> IO Channel

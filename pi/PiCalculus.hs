@@ -13,7 +13,7 @@ import Network.HTTP.Base (Request(..), RequestMethod(..), mkRequest)
 import Network.URI (parseURI)
 import System.Environment (getArgs, getProgName)
 import System.IO (hFlush, stderr, stdin, stdout)
-import Text.ParserCombinators.Parsec (Parser, endBy, parse, many1, newline)
+import Text.ParserCombinators.Parsec (Parser, sepBy, parse, many, newline)
 
 import qualified Data.Map as Map
 
@@ -161,13 +161,13 @@ main = do
                     putStrLn $ name ++ " [process] -- Run single process"
         
 readProcess :: String -> ThrowsError PiProcess
-readProcess = readOrThrow parseProcess 
+readProcess = readOrThrow parseProcess "single process"
 
 readProcessList :: String -> ThrowsError [PiProcess]
-readProcessList = readOrThrow (endBy parseProcess (many1 newline))
+readProcessList = readOrThrow (sepBy parseProcess (many newline)) "multiple-processes"
 
-readOrThrow :: Parser a -> String ->  ThrowsError a
-readOrThrow parser input = case parse parser "pi-calculus" input of
+readOrThrow :: Parser a -> String -> String ->  ThrowsError a
+readOrThrow parser name input = case parse parser name input of
                         Left  err -> throwError $ Parser err
                         Right val -> return val 
 

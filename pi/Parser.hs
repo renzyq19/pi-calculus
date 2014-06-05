@@ -78,12 +78,21 @@ parseLet = do
             spaces
             name <- parseTerm
             paddedChar '='
-            val <- liftM Term parseTerm <|> liftM Proc parseProcess
+            val <- liftM Proc parseProcessNoAtom <|> liftM Term parseTerm
             p <- try (do 
                 paddedStr "in"
                 proc <- parseProcess
                 return $ Just proc) <|> return Nothing
             return $ Let name val p
+            where
+                parseProcessNoAtom = bracketed parseProcess'' <|> parseProcess''
+                parseProcess'' = parseNull 
+                             <|> try parseIf
+                             <|> try parseIn 
+                             <|> try parseOut
+                             <|> try parseLet
+                             <|> parseReplicate
+                             <|> parseNew
 
 parseAtom :: Parser PiProcess
 parseAtom = liftM Atom parseTerm
@@ -154,13 +163,14 @@ parseProcess = liftM Conc $ sepBy parseProcess' (paddedChar '|')
     where
     parseProcess'  = bracketed parseProcess'' <|> parseProcess''
     parseProcess'' = parseNull 
+
                  <|> try parseIf
-                 <|> parseIn 
-                 <|> parseOut
+                 <|> try parseIn 
+                 <|> try parseOut
+                 <|> try parseLet
+                 <|> parseAtom
                  <|> parseReplicate
                  <|> parseNew
-                 <|> parseLet
-                 <|> parseAtom
 
 bracketed :: Parser a -> Parser a
 bracketed parser = do

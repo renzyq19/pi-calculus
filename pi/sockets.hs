@@ -1,7 +1,7 @@
 import Network.HTTP
 import Network.URI
 import Network
-import Channel
+import TypDefs
 import System.IO
 import Control.Monad
 import Control.Concurrent
