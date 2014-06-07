@@ -7,13 +7,13 @@ import Control.Monad (liftM, liftM2, unless)
 import Control.Monad.Error (throwError)
 import Control.Monad.Trans (liftIO)
 import Control.Monad.Trans.Except (catchE, runExceptT, throwE)
+import Data.Char (isSpace)
 import Data.IORef (newIORef, readIORef,writeIORef)
 import Data.Maybe (isJust)
 import Network.HTTP.Base (Request(..), RequestMethod(..), mkRequest)
 import Network.URI (parseURI)
 import System.Environment (getArgs, getProgName)
 import System.IO (hFlush, stderr, stdin, stdout)
-import Text.ParserCombinators.Parsec (Parser, sepBy, parse, many, newline)
 
 import qualified Data.Map as Map
 
@@ -160,19 +160,25 @@ main = do
                     putStrLn $ name ++ " -- Enter the REPL"
                     putStrLn $ name ++ " [process] -- Run single process"
         
-readProcess :: String -> ThrowsError PiProcess
-readProcess = readOrThrow parseProcess "single process"
 
-readProcessList :: String -> ThrowsError [PiProcess]
-readProcessList = readOrThrow (sepBy parseProcess (many newline)) "multiple-processes"
-
-readOrThrow :: Parser a -> String -> String ->  ThrowsError a
-readOrThrow parser name input = case parse parser name input of
-                        Left  err -> throwError $ Parser err
-                        Right val -> return val 
 
 load :: String -> IOThrowsError [PiProcess]
-load filename = liftIO (readFile filename) >>= liftThrows . readProcessList
+load filename = do
+        ls <- liftM lines $ liftIO $ readFile filename
+        readLines $ filter (not . nullOrEmpty) ls
+        where
+            readLines :: [String] -> IOThrowsError [PiProcess]
+            readLines [] = throwE $ Default "Nothing to Parse" 
+            readLines [x] = liftM return $ liftThrows $ readProcess x -- return in the List monad
+            readLines (x1:x2:xs) = 
+                case readProcess x1 of
+                    Left  _ -> readLines ((x1++" "++x2) : xs)
+                    Right p -> do
+                        rest <- readLines (x2:xs)
+                        return $ p:rest
+            nullOrEmpty x = null x || all isSpace x 
+                        
+
                         
 evalCond :: Env -> Condition -> IOThrowsError Bool
 evalCond env (t1 `Equals` t2) = liftM2 (==) (evalTerm env t1) (evalTerm env t2)
@@ -295,6 +301,9 @@ eval env (Let (TFun name args _) t2 Nothing)  =
 eval env (Atom (TFun "load" [TStr file] 1)) = do
             procs <- load file  
             eval env $ foldl Seq Null procs
+eval env (Atom (TFun "env" [] 0)) = do
+            e <- liftIO $ readIORef env
+            liftIO $ mapM_ (\(k,v) -> putStrLn $ k ++ ": " ++ show v) $ Map.toAscList e
 eval env (Atom p)  = do
             proc <- evalProcess env p
             eval env proc
@@ -322,10 +331,6 @@ runIOThrows action = liftM extractValue $ runExceptT (trapError action)
 trapError :: IOThrowsError String -> IOThrowsError String
 trapError action = catchE action (return . show)
 
-readTerm :: String -> ThrowsError Term 
-readTerm str = case parse parseTerm "Term" str of
-                Left  err -> throwError $ Parser err
-                Right val -> return val 
 
 evalAndPrint :: Env -> String -> IO ()
 evalAndPrint env expr = do

@@ -26,9 +26,9 @@ data PiProcess = Null
                | In   Term Term
                | Out  Term Term
                | New  Term
-               | PiProcess `Seq`   PiProcess -- Sequential Composition
-               | Conc [PiProcess]            -- Parallel   Composition
-               | Replicate PiProcess         -- Infinite parallel replication
+               | PiProcess `Seq` PiProcess 
+               | Conc [PiProcess]          
+               | Replicate PiProcess       
                | Let Term Value (Maybe PiProcess)
                | If Condition PiProcess PiProcess
                | Atom Term

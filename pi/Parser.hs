@@ -1,12 +1,14 @@
 module Parser (
-        parseTerm,
-        parseProcess)
+        readTerm,
+        readProcess,
+        readProcesses)
         where
 
 import Control.Monad (liftM)
+import Control.Monad.Error (throwError)
 import Text.ParserCombinators.Parsec
 
-import TypDefs (Condition (..), PiProcess (..), Term (..), Value(..), Name)
+import TypDefs (Condition (..), PiProcess (..), Term (..), Value(..), Name, PiError(Parser), ThrowsError)
 
 parseNull :: Parser PiProcess
 parseNull = do
@@ -78,21 +80,12 @@ parseLet = do
             spaces
             name <- parseTerm
             paddedChar '='
-            val <- liftM Proc parseProcessNoAtom <|> liftM Term parseTerm
+            val <- try (liftM Proc parseProcessNoAtom) <|> liftM Term parseTerm
             p <- try (do 
                 paddedStr "in"
                 proc <- parseProcess
                 return $ Just proc) <|> return Nothing
             return $ Let name val p
-            where
-                parseProcessNoAtom = bracketed parseProcess'' <|> parseProcess''
-                parseProcess'' = parseNull 
-                             <|> try parseIf
-                             <|> try parseIn 
-                             <|> try parseOut
-                             <|> try parseLet
-                             <|> parseReplicate
-                             <|> parseNew
 
 parseAtom :: Parser PiProcess
 parseAtom = liftM Atom parseTerm
@@ -158,17 +151,31 @@ parseTerm =  try parseAnonChan
                     [] -> return $ TFun "anonChan" [] 0
                     _  -> return $ TFun "anonChan" [TNum (read arg)] 1
 
+parseProcesses :: Parser [PiProcess]
+parseProcesses = sepBy parseProcess (newline)
+
 parseProcess :: Parser PiProcess
-parseProcess = liftM Conc $ sepBy parseProcess' (paddedChar '|')
+parseProcess = liftM Conc $ sepBy1 parseProcess' (paddedChar '|')
     where
     parseProcess'  = bracketed parseProcess'' <|> parseProcess''
     parseProcess'' = parseNull 
-
                  <|> try parseIf
                  <|> try parseIn 
                  <|> try parseOut
                  <|> try parseLet
                  <|> parseAtom
+                 <|> parseReplicate
+                 <|> parseNew
+
+parseProcessNoAtom :: Parser PiProcess
+parseProcessNoAtom = liftM Conc $ sepBy1 parseProcess' (paddedChar '|')
+    where
+    parseProcess'  = bracketed parseProcess'' <|> parseProcess''
+    parseProcess'' = parseNull 
+                 <|> try parseIf
+                 <|> try parseIn 
+                 <|> try parseOut
+                 <|> try parseLet
                  <|> parseReplicate
                  <|> parseNew
 
@@ -180,3 +187,19 @@ bracketed parser = do
                     spaces
                     _ <- char ')'
                     return res
+
+readOrThrow :: Parser a -> String -> String -> ThrowsError a
+readOrThrow parser name input = case parse parser name input of
+                        Left  err -> throwError $ Parser err
+                        Right val -> return val 
+
+readProcess :: String -> ThrowsError PiProcess
+readProcess = readOrThrow parseProcess "single process"
+
+readProcesses :: String -> ThrowsError [PiProcess]
+readProcesses = readOrThrow parseProcesses "multiple-processes"
+
+readTerm :: String -> ThrowsError Term 
+readTerm str = case parse parseTerm "Term" str of
+                Left  err -> throwError $ Parser err
+                Right val -> return val 
