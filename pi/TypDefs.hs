@@ -6,7 +6,7 @@ module TypDefs (
     Value      (..),
     Channel    (..),
     Type       (..),
-    ChannelType(..),
+    BuildType  (..),
     PiError    (..),
     IOThrowsError  ,
     ThrowsError    ,
@@ -98,10 +98,8 @@ data Channel = Channel {
              , extra        :: [String]
              }
 
-data ChannelType = Internal
-                 | Std
-                 | HTTP
-                 | String
+data BuildType = Init
+               | Connect
                  deriving (Eq, Show, Read)
 
 showValue :: Value -> String

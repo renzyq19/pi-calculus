@@ -71,7 +71,7 @@ parseIf = do
             cond <- parseCondition
             paddedStr "then"
             p1 <- parseProcess
-            p2 <- try (do {paddedStr "else" ; parseProcess}) <|> return Null
+            p2 <- option Null (do {paddedStr "else" ; parseProcess})
             return $ If cond p1 p2
 
 parseLet :: Parser PiProcess
@@ -81,10 +81,9 @@ parseLet = do
             name <- parseTerm
             paddedChar '='
             val <- try (liftM Proc parseProcessNoAtom) <|> liftM Term parseTerm
-            p <- try (do 
+            p <- optionMaybe (do 
                 paddedStr "in"
-                proc <- parseProcess
-                return $ Just proc) <|> return Nothing
+                parseProcess)
             return $ Let name val p
 
 parseAtom :: Parser PiProcess
@@ -151,8 +150,9 @@ parseTerm =  try parseAnonChan
                     [] -> return $ TFun "anonChan" [] 0
                     _  -> return $ TFun "anonChan" [TNum (read arg)] 1
 
+
 parseProcesses :: Parser [PiProcess]
-parseProcesses = sepBy parseProcess (newline)
+parseProcesses = endBy parseProcess eof
 
 parseProcess :: Parser PiProcess
 parseProcess = liftM Conc $ sepBy1 parseProcess' (paddedChar '|')
@@ -200,6 +200,6 @@ readProcesses :: String -> ThrowsError [PiProcess]
 readProcesses = readOrThrow parseProcesses "multiple-processes"
 
 readTerm :: String -> ThrowsError Term 
-readTerm str = case parse parseTerm "Term" str of
+readTerm str = case parse parseTerm "term" str of
                 Left  err -> throwError $ Parser err
                 Right val -> return val 

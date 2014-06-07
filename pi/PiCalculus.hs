@@ -60,7 +60,9 @@ coreBindings = do
                 n <- nullEnv 
                 e1 <- bindVars n (map (second PrimitiveFunc) primitives) 
                 e2 <- bindVars e1 (map (second Chan) nativeChannels)
-                bindVars e2 [(counterRef, Term $ TNum lowestPort)]
+                net <- newDummyChan
+                bindVars e2 [(counterRef, Term $ TNum lowestPort),
+                             ("localnet"     , Chan net)]
                 where 
                     lowestPort = 2^(15::Integer) + 2^(14::Integer)
 counterRef :: String
@@ -196,11 +198,14 @@ evalTerm env (TPair (t1,t2)) = do
                 _                -> throwE $ Default "pair not given two terms"
 evalTerm env (TFun "anonChan" [] 0) = do
             port <- assignFreePort env
-            liftM Chan $ liftIO $ newChan Internal ("localhost:"++ show port) port 
-evalTerm _   (TFun "anonChan" [TNum n] 1) = liftM Chan $ liftIO $ newChan Internal ("localhost:"++ show n) n 
+            liftM Chan $ liftIO $ newChan Init ("localhost:" ++ show port) port 
+evalTerm _   (TFun "anonChan" [TNum n] 1) = liftM Chan $ liftIO $ newChan Init ("localhost:"++ show n) n 
 evalTerm env (TFun "httpChan" [TStr addr] 1) = do
             port <- assignFreePort env
-            liftM Chan $ liftIO $ newChan HTTP (addr ++ ":80") port
+            liftM Chan $ liftIO $ newChan Connect (addr ++ ":80") port
+evalTerm env (TFun "chan" [TStr addr] 1) = do
+            port <- assignFreePort env
+            liftM Chan $ liftIO $ newChan Connect addr port
 evalTerm env (TFun name args _) = do
             fun <- getVar env name
             argVals <- mapM (evalTerm env) args
@@ -359,12 +364,13 @@ flushStr :: String -> IO ()
 flushStr str = putStr str >> hFlush stdout
 
 sendOut :: Channel -> Value -> IOThrowsError () 
+sendOut _  (Chan (Channel _ _ False _)) = throwE $ Default "Channel not serialisable" 
 sendOut chan val = liftIO $ send chan $ show val
 
 receiveIn :: Channel -> IOThrowsError Value
 receiveIn chan = do
-        msg <- liftIO $ receive chan
-        let term = extractValue $ readTerm msg
+        msg  <- liftIO $ receive chan
+        term <- liftThrows $ readTerm msg
         case term of
             TFun "<chan>" ex _ -> decodeChannel ex
             _ -> return $ Term term
@@ -373,15 +379,14 @@ receiveIn chan = do
                 let extraStrings = map (\(TStr x) -> x) e
                 let extraData = map (second tail . break (==dataBreak)) extraStrings
                 case getChannelData extraData of
-                    Just (t,h,p)  -> liftM Chan $ liftIO $ newChan t h p
+                    Just (h,p)  -> liftM Chan $ liftIO $ newChan Connect h p
                     Nothing -> throwE $ Default "incomplete data in channel"
 
-getChannelData :: [(String,String)] -> Maybe (ChannelType, String, Integer)
+getChannelData :: [(String,String)] -> Maybe (String, Integer)
 getChannelData ex = do
-        t            <- lookup "type" ex
         host         <- lookup "host" ex
         cp           <- lookup "clientPort" ex
-        return (read t,host,read cp)
+        return (host,read cp)
 
 evalChan :: Env -> Term -> IOThrowsError Channel
 evalChan env t = do

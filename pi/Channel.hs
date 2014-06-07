@@ -1,75 +1,82 @@
 module Channel  (
     stdChan        ,
     newChan        ,
+    newDummyChan   ,
     dataBreak      )
     where
 
 import Control.Applicative ((<$>))
 import Control.Concurrent (forkIO,threadDelay)
 import Control.Concurrent.MVar
+import qualified Control.Concurrent.Chan as Ch
 import Network.BSD (getHostName)
 import qualified Network as N
 import System.IO (Handle, hFlush, hGetLine, hPutStr, hPutStrLn, hReady)
 import System.IO.Error (catchIOError)
 
-import TypDefs (Channel (..), ChannelType (..))
+import TypDefs (Channel (..), BuildType (..))
 
 stdChan :: Handle -> Channel
 stdChan h = Channel write rd False []
     where
         write = hPutStrLn h
-        rd = unlines <$> emptyHandle h
+        rd = hGetLine h
 
-newChan :: ChannelType -> String -> Integer -> IO Channel
-newChan t host cp = do
-            currentHost <- getHostName
+newChan :: BuildType -> String -> Integer -> IO Channel
+newChan t host cp =
             case t of
-                Internal -> newInternalChan currentHost hostPort cp
-                HTTP
-                    | hostName == "localhost" || hostName == currentHost -> newChanServer t cp
-                    | otherwise               -> newChanClient t hostName hostPort
-                _                             -> newChanClient t hostName hostPort
+                Init    -> newChanServer cp
+                Connect -> newChanClient hostName hostPort
                where
                (hostName, _:hostPort) = break (==':') host
 
-newInternalChan :: String -> String -> Integer -> IO Channel
-newInternalChan hostName hostPort cp = return $ Channel s r True ex
+newDummyChan :: IO Channel
+newDummyChan = do
+    chan <- Ch.newChan
+    return $ Channel (Ch.writeChan chan) (Ch.readChan chan) False []
+    
+{-newInternalChan :: String -> String -> Integer -> IO Channel
+newInternalChan hostName hostPort cp = do
+    currentHost <- getHostName
+    let ex = makeExtra ["host","clientPort"] [currentHost ++ ":" ++ hostPort,show cp]
+    return $ Channel s r True ex
     where
        r   = N.withSocketsDo $ do
             sock <- N.listenOn $ N.PortNumber $ fromIntegral cp
             (inHandle,_,_) <- N.accept sock
             msg <- unlines <$> emptyHandle inHandle
+            putStrLn $ "got: " ++ msg
             N.sClose sock
             return msg
        s v = N.withSocketsDo $ do
             _ <- forkIO $ do
                 outHandle <- waitForConnect hostName $ N.PortNumber $ port hostPort
+                putStrLn $ "sending: " ++ v
                 hPutStr outHandle v
-            return ()
-       ex = makeExtra ["host","clientPort","type"] [hostName ++ ":" ++ hostPort,show cp,show HTTP]
+            return ()-}
 
 
-newChanServer :: ChannelType -> Integer -> IO Channel
-newChanServer t cp = N.withSocketsDo $ do
+newChanServer :: Integer -> IO Channel
+newChanServer cp = N.withSocketsDo $ do
     hanVar <- newEmptyMVar
     _ <- forkIO $ do
         sock <- N.listenOn $ N.PortNumber $ fromIntegral cp
         (inHandle,_,_)  <- N.accept sock
         putMVar hanVar inHandle
     currentHost <- getHostName
-    let ex  = makeExtra ["clientPort","type"] [show cp,show t]
+    let ex  = makeExtra ["clientPort"] [show cp]
     let ex' = ex ++ makeExtra ["host"] [currentHost ++ ":" ++ show cp]
     return $ Channel (send' hanVar) (receive' hanVar) True ex'
 
-newChanClient :: ChannelType -> String -> String -> IO Channel
-newChanClient t hostName hostPort = N.withSocketsDo $ do
+newChanClient :: String -> String -> IO Channel
+newChanClient hostName hostPort = N.withSocketsDo $ do
     hanVar <- newEmptyMVar
     _ <- forkIO $ do
         outHandle <- waitForConnect hostName $ N.PortNumber $ port hostPort
         putMVar hanVar outHandle
     return $ Channel (send' hanVar) (receive' hanVar) True ex
     where
-       ex = makeExtra ["host","clientPort","type"] [hostName ++ ":" ++ hostPort,"-1",show t]
+       ex = makeExtra ["host","clientPort"] [hostName ++ ":" ++ hostPort,"-1"]
 
 waitForConnect :: N.HostName -> N.PortID -> IO Handle
 waitForConnect h p = N.connectTo h p `catchIOError`
