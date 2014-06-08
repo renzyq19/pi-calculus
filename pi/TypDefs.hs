@@ -32,7 +32,7 @@ data PiProcess = Null
                | Let Term Value (Maybe PiProcess)
                | If Condition PiProcess PiProcess
                | Atom Term
-                 deriving (Eq,Show)
+                 deriving (Eq)
 
 data Term = TVar Name
           | TStr String
@@ -144,7 +144,7 @@ showTerm (TFun n ts _ ) = n ++ "(" ++ intercalate "," (map show ts) ++ ")"
 showCond :: Condition -> String
 showCond (t1 `Equals` t2) = show t1 ++ " == " ++ show t2
 
---instance Show PiProcess where show = showPi
+instance Show PiProcess where show = showPi
 instance Show Term      where show = showTerm
 instance Show Condition where show = showCond
 instance Show Value     where show = showValue

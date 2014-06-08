@@ -3,7 +3,7 @@ module Main where
 import Control.Arrow (second)
 import Control.Concurrent (forkIO, threadDelay)
 import Control.Concurrent.MVar (newEmptyMVar, takeMVar, tryPutMVar)
-import Control.Monad (liftM, liftM2, unless)
+import Control.Monad (liftM, liftM2, unless, void)
 import Control.Monad.Error (throwError)
 import Control.Monad.Trans (liftIO)
 import Control.Monad.Trans.Except (catchE, runExceptT, throwE)
@@ -70,11 +70,8 @@ counterRef = "###"
 
 nativeChannels :: [(String   , Channel)]
 nativeChannels = [ ("stdin"  , stdChan stdin) 
-                 , ("0"      , stdChan stdin) 
                  , ("stdout" , stdChan stdout)
-                 , ("1"      , stdChan stdout)
                  , ("stderr" , stdChan stderr)
-                 , ("2"      , stdChan stderr)
                  ]
 
 primitives :: [(String      , TermFun)]
@@ -253,7 +250,7 @@ eval env (Out a b) = do
                 bVal <- evalTerm env b
                 sendOut chan bVal
                 return ()
-eval env (Replicate proc) = liftIO (threadDelay 1000000) >> eval env (Conc [proc, Replicate proc])
+eval env (Replicate proc) = liftIO (threadDelay 100000) >> eval env (Conc [proc, Replicate proc])
 eval env (Conc [])     = eval env Null
 eval env (Conc procs)  = do
                 var <- liftIO newEmptyMVar 
@@ -270,9 +267,7 @@ eval env (Conc procs)  = do
 eval env (p1 `Seq` p2) = do
                 eval env p1
                 eval env p2
-eval env (New var@(TVar name)) = do
-                _ <- defineVar env name $ Term var
-                return ()
+eval env (New var@(TVar name)) = void $ defineVar env name $ Term var
 eval env (If b p1 p2) = do
                 cond <- evalCond env b
                 eval env (if cond then p1 else p2)
@@ -294,15 +289,11 @@ eval env (Atom (TFun "load" [TStr file] 1)) = do
 eval env (Atom (TFun "env" [] 0)) = do
             e <- liftIO $ readIORef env
             liftIO $ mapM_ (\(k,v) -> putStrLn $ k ++ ": " ++ show v) $ Map.toAscList e
-eval env (Atom p)  = do
-            proc <- evalProcess env p
-            eval env proc
+eval env (Atom p)  = void $ evalProcess env p
 eval _ _ = throwE $ Default "undefined action"
 
 defineGlobalFun :: Env -> String -> [Term] -> Value -> IOThrowsError ()
-defineGlobalFun env name args term = do
-            _ <- defineVar env name $ makeFun args term env
-            return ()
+defineGlobalFun env name args term = void $ defineVar env name $ makeFun args term env
 
 defineLocalFun :: Env -> String -> [Term] -> Value -> PiProcess -> IOThrowsError ()
 defineLocalFun env name args term p = do

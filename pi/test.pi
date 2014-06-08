@@ -1,2 +1,1 @@
-in(stdin,msg);out(stdout,msg)
-let a = b
+!(in(stdin,msg);out(stdout,msg))
