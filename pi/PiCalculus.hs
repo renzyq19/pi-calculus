@@ -7,7 +7,6 @@ import Control.Monad (liftM, liftM2, unless)
 import Control.Monad.Error (throwError)
 import Control.Monad.Trans (liftIO)
 import Control.Monad.Trans.Except (catchE, runExceptT, throwE)
-import Data.Char (isSpace)
 import Data.IORef (newIORef, readIORef,writeIORef)
 import Data.Maybe (isJust)
 import Network.HTTP.Base (Request(..), RequestMethod(..), mkRequest)
@@ -165,20 +164,7 @@ main = do
 
 
 load :: String -> IOThrowsError [PiProcess]
-load filename = do
-        ls <- liftM lines $ liftIO $ readFile filename
-        readLines $ filter (not . nullOrEmpty) ls
-        where
-            readLines :: [String] -> IOThrowsError [PiProcess]
-            readLines [] = throwE $ Default "Nothing to Parse" 
-            readLines [x] = liftM return $ liftThrows $ readProcess x -- return in the List monad
-            readLines (x1:x2:xs) = 
-                case readProcess x1 of
-                    Left  _ -> readLines ((x1++" "++x2) : xs)
-                    Right p -> do
-                        rest <- readLines (x2:xs)
-                        return $ p:rest
-            nullOrEmpty x = null x || all isSpace x 
+load filename = liftIO (readFile filename) >>= liftThrows . readProcesses 
                         
 
                         

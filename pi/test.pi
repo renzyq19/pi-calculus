@@ -1,1 +1,2 @@
-in(stdin,msg);out(stdout,msg);0
+in(stdin,msg);out(stdout,msg)
+let a = b

@@ -41,12 +41,13 @@ parseReplicate = do
             return $ Replicate process
             <?> "parse replicate"
 
+myOption :: Show b => a -> Parser a -> Parser b -> Parser a
+myOption opt parser sep = try (notFollowedBy sep >> return opt) <|> (sep >> parser)
+
 parseSeq :: PiProcess -> Parser PiProcess
 parseSeq p1 = do
-            p2 <- option Null $ do paddedChar ';' 
-                                   parseProcess
+            p2 <- myOption Null parseProcess (paddedChar ';')
             return $ p1 `Seq` p2
-            <?> "parse seq"
 
 parseNew :: Parser PiProcess
 parseNew = do
@@ -56,6 +57,7 @@ parseNew = do
             parseSeq $ New name
             <?> "parse new"
 
+
 parseIf :: Parser PiProcess
 parseIf = do
             _ <- string "if" 
@@ -63,8 +65,7 @@ parseIf = do
             cond <- parseCondition
             paddedStr "then"
             p1 <- parseProcess
-            p2 <- option Null $ do paddedStr "else" 
-                                   parseProcess
+            p2 <- myOption Null parseProcess (paddedStr1 "else")
             return $ If cond p1 p2 
             <?> "parse if"
 
@@ -75,9 +76,7 @@ parseLet = do
             name <- parseTerm
             paddedChar1 '='
             val <- try (liftM Proc parseProcess) <|> liftM Term parseTerm
-            p <- optionMaybe (do 
-                paddedStr "in"
-                parseProcess)
+            p <- myOption Nothing (liftM Just parseProcess) (paddedStr1 "in") 
             return $ Let name val p
             <?> "parse let"
 
@@ -173,7 +172,7 @@ parseTerm =  try parseAnonChan
                     _  -> return $ TFun "anonChan" [TNum (read arg)] 1
 
 parseProcesses :: Parser [PiProcess]
-parseProcesses = sepBy parseProcess newline
+parseProcesses = sepEndBy parseProcess newline
 
 parseProcess :: Parser PiProcess
 parseProcess = liftM (\ps -> case ps of 
@@ -183,11 +182,11 @@ parseProcess = liftM (\ps -> case ps of
     parseProcess'  = bracketed parseProcess'' <|> parseProcess''
     parseProcess'' = parseNull 
                  <|> try parseIf
-                 <|> try parseIn 
-                 <|> try parseOut
-                 <|> try parseLet
-                 <|> try parseReplicate
-                 <|> try parseNew
+                 <|> parseIn 
+                 <|> parseOut
+                 <|> parseLet
+                 <|> parseReplicate
+                 <|> parseNew
                  <|> parseAtom
 
 bracketed :: Parser a -> Parser a
