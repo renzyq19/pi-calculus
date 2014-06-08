@@ -245,6 +245,9 @@ eval env (In a (TVar name)) = do
                 received <- receiveIn chan
                 _ <- defineVar env name received 
                 return ()
+eval env (In a b@(TFun{})) = do
+                chan <- evalChan env a
+                receiveAndMatch env b chan
 eval env (Out a b) = do 
                 chan <- evalChan env a
                 bVal <- evalTerm env b
@@ -357,6 +360,24 @@ receiveIn chan = do
                 case getChannelData extraData of
                     Just (h,p)  -> liftM Chan $ liftIO $ newChan Connect h p
                     Nothing -> throwE $ Default "incomplete data in channel"
+
+receiveAndMatch :: Env -> Term -> Channel -> IOThrowsError ()
+receiveAndMatch env term chan = do
+            str <- liftIO $ receive chan
+            let parsed = readTerm str
+            case parsed of
+                Right t -> matchTerms env t term
+                Left  _ -> do
+                bindings <- match str term
+                newEnv <- liftIO $ bindVars env bindings
+                e <- liftIO $ readIORef newEnv
+                liftIO $ writeIORef env e 
+        where
+        match :: String -> Term -> IOThrowsError [(String,Value)]
+        match = undefined
+        matchTerms :: Env -> Term -> Term -> IOThrowsError ()
+        matchTerms = undefined
+
 
 getChannelData :: [(String,String)] -> Maybe (String, Integer)
 getChannelData ex = do
