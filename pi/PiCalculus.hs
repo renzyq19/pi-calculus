@@ -269,7 +269,6 @@ eval env (Out a b) = do
                 return ()
 eval env (Replicate proc) = liftIO (threadDelay 1000000) >> eval env (Conc [proc, Replicate proc])
 eval env (Conc [])     = eval env Null
-eval env (Conc [proc]) = eval env proc
 eval env (Conc procs)  = do
                 var <- liftIO newEmptyMVar 
                 mapM_ (forkProcess var) procs

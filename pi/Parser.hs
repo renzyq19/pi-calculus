@@ -11,9 +11,7 @@ import Text.ParserCombinators.Parsec
 import TypDefs (Condition (..), PiProcess (..), Term (..), Value(..), Name, PiError(Parser), ThrowsError)
 
 parseNull :: Parser PiProcess
-parseNull = do
-            paddedChar '0'
-            return Null
+parseNull = char '0' >> return Null <?> "parse null"
 
 parseIn :: Parser PiProcess
 parseIn = do
@@ -23,6 +21,7 @@ parseIn = do
             var  <- parseTerm
             _ <- char ')'
             parseSeq $ In name var 
+            <?> "parse in"
 
 parseOut :: Parser PiProcess
 parseOut = do
@@ -32,6 +31,7 @@ parseOut = do
             term  <- parseTerm
             _ <- char ')'
             parseSeq $ Out name term 
+            <?> "parse out"
 
 parseReplicate :: Parser PiProcess
 parseReplicate = do
@@ -39,23 +39,14 @@ parseReplicate = do
             process <- parseProcess
             _ <- char ')'
             return $ Replicate process
-
-paddedChar :: Char ->  Parser ()
-paddedChar ch = do
-            spaces
-            _ <- char ch
-            spaces
-
-paddedStr :: String -> Parser ()
-paddedStr str = do
-            spaces
-            _ <- string str
-            spaces
+            <?> "parse replicate"
 
 parseSeq :: PiProcess -> Parser PiProcess
 parseSeq p1 = do
-            p2 <- try (do {paddedChar ';' ; parseProcess}) <|> return Null
+            p2 <- option Null $ do paddedChar ';' 
+                                   parseProcess
             return $ p1 `Seq` p2
+            <?> "parse seq"
 
 parseNew :: Parser PiProcess
 parseNew = do
@@ -63,6 +54,7 @@ parseNew = do
             spaces
             name <- parseTerm
             parseSeq $ New name
+            <?> "parse new"
 
 parseIf :: Parser PiProcess
 parseIf = do
@@ -71,28 +63,61 @@ parseIf = do
             cond <- parseCondition
             paddedStr "then"
             p1 <- parseProcess
-            p2 <- option Null (do {paddedStr "else" ; parseProcess})
-            return $ If cond p1 p2
+            p2 <- option Null $ do paddedStr "else" 
+                                   parseProcess
+            return $ If cond p1 p2 
+            <?> "parse if"
 
 parseLet :: Parser PiProcess
 parseLet = do
             _ <- string "let"
             spaces
             name <- parseTerm
-            paddedChar '='
-            val <- try (liftM Proc parseProcessNoAtom) <|> liftM Term parseTerm
+            paddedChar1 '='
+            val <- try (liftM Proc parseProcess) <|> liftM Term parseTerm
             p <- optionMaybe (do 
                 paddedStr "in"
                 parseProcess)
             return $ Let name val p
+            <?> "parse let"
 
 parseAtom :: Parser PiProcess
-parseAtom = liftM Atom parseTerm
+parseAtom = do 
+            _ <- char '&' 
+            atom <- parseTerm 
+            parseSeq $ Atom atom 
+
+padded1 :: Parser a -> Parser ()
+padded1 p = do 
+         skipMany1 space
+         _ <- p
+         skipMany1 space
+
+paddedChar :: Char ->  Parser ()
+paddedChar ch = padded $ char ch
+
+paddedStr :: String -> Parser ()
+paddedStr str = padded $ string str
+
+padded :: Parser a -> Parser ()
+padded p = do 
+         spaces
+         _ <- p
+         spaces
+
+paddedChar1 :: Char ->  Parser ()
+paddedChar1 ch = padded1 $ char ch
+
+paddedStr1 :: String -> Parser ()
+paddedStr1 str = padded1 $ string str
+
+paddedComma :: Parser ()
+paddedComma = paddedChar ','
 
 parseCondition :: Parser Condition
 parseCondition = do
             t1 <- parseTerm
-            paddedChar '='
+            paddedChar1 '='
             t2 <- parseTerm
             return $ t1 `Equals` t2
 
@@ -132,9 +157,6 @@ readVar = do
 symbol :: Parser Char
 symbol = oneOf "'._<>"
 
-paddedComma :: Parser ()
-paddedComma = paddedChar ','
-
 parseTerm :: Parser Term
 parseTerm =  try parseAnonChan
          <|> try parseTFun
@@ -150,12 +172,13 @@ parseTerm =  try parseAnonChan
                     [] -> return $ TFun "anonChan" [] 0
                     _  -> return $ TFun "anonChan" [TNum (read arg)] 1
 
-
 parseProcesses :: Parser [PiProcess]
-parseProcesses = endBy parseProcess eof
+parseProcesses = sepBy parseProcess newline
 
 parseProcess :: Parser PiProcess
-parseProcess = liftM Conc $ sepBy1 parseProcess' (paddedChar '|')
+parseProcess = liftM (\ps -> case ps of 
+                        [p] -> p
+                        _   -> Conc ps) $ sepBy1 parseProcess' (char '|')
     where
     parseProcess'  = bracketed parseProcess'' <|> parseProcess''
     parseProcess'' = parseNull 
@@ -163,30 +186,12 @@ parseProcess = liftM Conc $ sepBy1 parseProcess' (paddedChar '|')
                  <|> try parseIn 
                  <|> try parseOut
                  <|> try parseLet
+                 <|> try parseReplicate
+                 <|> try parseNew
                  <|> parseAtom
-                 <|> parseReplicate
-                 <|> parseNew
-
-parseProcessNoAtom :: Parser PiProcess
-parseProcessNoAtom = liftM Conc $ sepBy1 parseProcess' (paddedChar '|')
-    where
-    parseProcess'  = bracketed parseProcess'' <|> parseProcess''
-    parseProcess'' = parseNull 
-                 <|> try parseIf
-                 <|> try parseIn 
-                 <|> try parseOut
-                 <|> try parseLet
-                 <|> parseReplicate
-                 <|> parseNew
 
 bracketed :: Parser a -> Parser a
-bracketed parser = do
-                    _ <- char '('
-                    spaces
-                    res <- parser
-                    spaces
-                    _ <- char ')'
-                    return res
+bracketed = between (char '(') (char ')')
 
 readOrThrow :: Parser a -> String -> String -> ThrowsError a
 readOrThrow parser name input = case parse parser name input of
