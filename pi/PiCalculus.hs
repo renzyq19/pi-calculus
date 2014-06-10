@@ -13,6 +13,7 @@ import Network.HTTP.Base (Request(..), RequestMethod(..), mkRequest)
 import Network.URI (parseURI)
 import System.Environment (getArgs, getProgName)
 import System.IO (hFlush, stderr, stdin, stdout)
+import System.IO.Error (tryIOError)
 
 import qualified Data.Map as Map
 
@@ -154,16 +155,18 @@ main = do
             []  -> runRepl coreBindings
             [x] -> readFile x >>= runProcess coreBindings 
             _   -> do
-                    putStrLn "Use:"
+                    putStrLn           "Use:"
                     putStrLn $ name ++ " -- Enter the REPL"
                     putStrLn $ name ++ " [process] -- Run single process"
         
 
 
 load :: String -> IOThrowsError [PiProcess]
-load filename = liftIO (readFile filename) >>= liftThrows . readProcesses 
-                        
-
+load filename = do
+                f <- liftIO $ tryIOError (readFile filename)
+                case f of
+                    Left _   -> throwE $ Default "File does not exist" 
+                    Right f' -> liftThrows . readProcesses $ f'
                         
 evalCond :: Env -> Condition -> IOThrowsError Bool
 evalCond env (t1 `Equals` t2) = liftM2 (==) (evalTerm env t1) (evalTerm env t2)
