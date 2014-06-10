@@ -39,6 +39,7 @@ data Term = TVar Name
           | TNum Integer
           | TBool Bool
           | TPair (Term, Term)
+          -- |TList [Term]
           | TFun Name [Term] Int
             deriving (Eq)
 
@@ -138,6 +139,7 @@ showTerm (TVar x)   = x
 showTerm (TStr str) = "\"" ++ str ++ "\""
 showTerm (TNum num) = show num
 showTerm (TBool b ) = map toLower $ show b
+-- showTerm (TList ls) = "[" ++ intercalate "," (map show ls) ++ "]"
 showTerm (TPair (a,b)) = "pair("++ show a ++ ","++ show b ++ ")"
 showTerm (TFun n ts _ ) = n ++ "(" ++ intercalate "," (map show ts) ++ ")"
 

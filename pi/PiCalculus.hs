@@ -186,10 +186,12 @@ evalTerm env (TFun "anonChan" [] 0) = do
             port <- assignFreePort env
             liftM Chan $ liftIO $ newChan Init ("localhost:" ++ show port) port 
 evalTerm _   (TFun "anonChan" [TNum n] 1) = liftM Chan $ liftIO $ newChan Init ("localhost:"++ show n) n 
-evalTerm env (TFun "httpChan" [TStr addr] 1) = do
+evalTerm env (TFun "httpChan" [a] 1) = do
+            addr <- evalToString env a
             port <- assignFreePort env
             liftM Chan $ liftIO $ newChan Connect (addr ++ ":80") port
-evalTerm env (TFun "chan" [TStr addr] 1) = do
+evalTerm env (TFun "chan" [a] 1) = do
+            addr <- evalToString env a
             port <- assignFreePort env
             liftM Chan $ liftIO $ newChan Connect addr port
 evalTerm env (TFun name args _) = do
@@ -197,6 +199,12 @@ evalTerm env (TFun name args _) = do
             argVals <- mapM (evalTerm env) args
             apply fun argVals
 
+evalToString :: Env -> Term -> IOThrowsError String
+evalToString env t = do
+            str <- evalTerm env t
+            case str of 
+                Term (TStr s) -> return s
+                _             -> throwE $ Default $ "Not a string : " ++ show t
 
 assignFreePort :: Env -> IOThrowsError Integer
 assignFreePort env = do
@@ -377,6 +385,7 @@ receiveAndMatch :: Env -> Term -> Channel -> IOThrowsError ()
 receiveAndMatch env term chan = do
             str <- liftIO $ receive chan
             let parsed = readTerm str
+            liftIO $ putStrLn str
             case parsed of
                 Right t -> matchTerms env t term
                 Left  _ -> do
@@ -385,11 +394,13 @@ receiveAndMatch env term chan = do
                 e <- liftIO $ readIORef newEnv
                 liftIO $ writeIORef env e 
         where
-        match :: String -> Term -> IOThrowsError [(String,Value)]
-        match = undefined
         matchTerms :: Env -> Term -> Term -> IOThrowsError ()
-        matchTerms = undefined
+        matchTerms _ _ _ = todo
+        match :: String -> Term -> IOThrowsError [(String,Value)]
+        match _ _ = todo
 
+todo :: IOThrowsError a
+todo = throwE $ Default "TODO"
 
 getChannelData :: [(String,String)] -> Maybe (String, Integer)
 getChannelData ex = do
