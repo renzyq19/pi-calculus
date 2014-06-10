@@ -285,6 +285,12 @@ eval env (Let (TVar name) (Term t2) Nothing) = do
                 val <- evalTerm env t2
                 _ <- defineVar env name val
                 return ()
+eval env (Let (TVar name) proc@(Proc _) (Just p)) = do
+                newEnv <- liftIO $ bindVars env [(name,proc)]
+                eval newEnv p
+eval env (Let (TVar name) proc@(Proc _) Nothing) = do
+                _ <- defineVar env name proc
+                return ()
 eval env (Let (TFun name args _) t2 (Just p)) = 
             defineLocalFun env name args t2 p
 eval env (Let (TFun name args _) t2 Nothing)  = 
@@ -292,10 +298,13 @@ eval env (Let (TFun name args _) t2 Nothing)  =
 eval env (Atom (TFun "load" [TStr file] 1)) = do
             procs <- load file  
             eval env $ foldl Seq Null procs
-eval env (Atom (TFun "env" [] 0)) = do
+eval env (Atom (TVar "env")) = do
             e <- liftIO $ readIORef env
             liftIO $ mapM_ (\(k,v) -> putStrLn $ k ++ ": " ++ show v) $ Map.toAscList e
-eval env (Atom p)  = void $ evalProcess env p
+eval env (Atom p@(TFun{})) = void $ evalProcess env p
+eval env (Atom p) = do
+            proc <- evalProcess env p
+            eval env proc
 eval _ _ = throwE $ Default "undefined action"
 
 defineGlobalFun :: Env -> String -> [Term] -> Value -> IOThrowsError ()
