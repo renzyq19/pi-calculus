@@ -109,7 +109,6 @@ type Env = IORef (Map String Value)
 data Channel = Channel {
                send         :: String -> IO ()
              , receive      :: IO String
-             , serialisable :: Bool 
              , extra        :: [String]
              }
 

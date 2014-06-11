@@ -33,6 +33,7 @@ getVar envRef var = do env <- liftIO $ readIORef envRef
                              (Map.lookup var env)
 
 setVar :: Env -> String -> Value -> IOThrowsError Value
+setVar _ "_" _ = return $ Term $ TVar "_" -- to allow wildcard matching
 setVar envRef var val = do env <- liftIO $ readIORef envRef
                            maybe (throwE $ UnboundVar "Setting an unbound variable" var)
                                  (return $ liftIO $ writeIORef envRef $ Map.insert var val env)
@@ -116,7 +117,10 @@ evalTerm env (TPair (t1,t2)) = do
 evalTerm env (TFun "anonChan" [] 0) = do
             port <- assignFreePort env
             liftM Chan $ liftIO $ newChan Init ("localhost:" ++ show port) port 
-evalTerm _   (TFun "anonChan" [TNum n] 1) = liftM Chan $ liftIO $ newChan Init ("localhost:"++ show n) n 
+evalTerm env (TFun "anonChan" [n] 1) = do
+            port <- evalToInt env n
+            c <- liftIO $ newChan Init ("localhost:"++ show port) port 
+            return $ Chan c
 evalTerm env (TFun "httpChan" [a] 1) = do
             addr <- evalToString env a
             port <- assignFreePort env
@@ -136,6 +140,13 @@ evalToString env t = do
             case str of 
                 Term (TStr s) -> return s
                 _             -> throwE $ Default $ "Not a string : " ++ show t
+
+evalToInt :: Env -> Term -> IOThrowsError Integer
+evalToInt env t = do
+            num <- evalTerm env t
+            case num of 
+                Term (TNum n) -> return n
+                _             -> throwE $ Default $ "Not a number : " ++ show t
 
 assignFreePort :: Env -> IOThrowsError Integer
 assignFreePort env = do
@@ -287,7 +298,9 @@ flushStr :: String -> IO ()
 flushStr str = putStr str >> hFlush stdout
 
 sendOut :: Channel -> Value -> IOThrowsError () 
-sendOut _  (Chan (Channel _ _ False _)) = throwE $ Default "Channel not serialisable" 
+sendOut _  v@(Chan c) = if serialisable c
+                        then liftIO $ send chan $ show v
+                        else throwE $ Default "Channel not serialisable" 
 sendOut chan val = liftIO $ send chan $ show val
 
 matchVar :: String -> String -> IOThrowsError [(String,Value)]

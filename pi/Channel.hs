@@ -2,6 +2,7 @@ module Channel  (
     stdChan        ,
     newChan        ,
     newDummyChan   ,
+    serialisable   ,  
     dataBreak      )
     where
 
@@ -17,7 +18,7 @@ import System.IO.Error (catchIOError)
 import TypDefs (Channel (..), BuildType (..))
 
 stdChan :: Handle -> Channel
-stdChan h = Channel write rd False []
+stdChan h = Channel write rd []
     where
         write = hPutStrLn h
         rd = hGetLine h
@@ -33,7 +34,7 @@ newChan t host cp =
 newDummyChan :: IO Channel
 newDummyChan = do
     chan <- Ch.newChan
-    return $ Channel (Ch.writeChan chan) (Ch.readChan chan) False []
+    return $ Channel (Ch.writeChan chan) (Ch.readChan chan) []
     
 {-newInternalChan :: String -> String -> Integer -> IO Channel
 newInternalChan hostName hostPort cp = do
@@ -66,7 +67,7 @@ newChanServer cp = N.withSocketsDo $ do
     currentHost <- getHostName
     let ex  = makeExtra ["clientPort"] [show cp]
     let ex' = ex ++ makeExtra ["host"] [currentHost ++ ":" ++ show cp]
-    return $ Channel (send' hanVar) (receive' hanVar) True ex'
+    return $ Channel (send' hanVar) (receive' hanVar) ex'
 
 newChanClient :: String -> String -> IO Channel
 newChanClient hostName hostPort = N.withSocketsDo $ do
@@ -74,7 +75,7 @@ newChanClient hostName hostPort = N.withSocketsDo $ do
     _ <- forkIO $ do
         outHandle <- waitForConnect hostName $ N.PortNumber $ port hostPort
         putMVar hanVar outHandle
-    return $ Channel (send' hanVar) (receive' hanVar) True ex
+    return $ Channel (send' hanVar) (receive' hanVar) ex
     where
        ex = makeExtra ["host","clientPort"] [hostName ++ ":" ++ hostPort,"-1"]
 
@@ -113,3 +114,6 @@ dataBreak = '#'
 
 makeExtra :: [String] -> [String] -> [String]
 makeExtra = zipWith (\a b -> (a ++ dataBreak : b))
+
+serialisable :: Channel -> Bool
+serialisable = not . null . extra
