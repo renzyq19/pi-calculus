@@ -2,10 +2,10 @@ module TypDefs (
     PiProcess  (..),
     Term       (..),
     TermFun        ,
+    HttpData   (..), 
     Condition  (..),
     Value      (..),
     Channel    (..),
-    Type       (..),
     BuildType  (..),
     PiError    (..),
     IOThrowsError  ,
@@ -19,6 +19,8 @@ import Data.Char (toLower)
 import Data.IORef (IORef)
 import Data.List (intercalate)
 import Data.Map (Map)
+import Network.HTTP.Base (Request, Response)
+import Network.HTTP.Headers (HasHeaders(..))
 
 import Text.ParserCombinators.Parsec (ParseError)
 
@@ -39,9 +41,29 @@ data Term = TVar Name
           | TNum Integer
           | TBool Bool
           | TPair (Term, Term)
-          -- |TList [Term]
+          | TList [Term]
+          | TData HttpData
           | TFun Name [Term] Int
             deriving (Eq)
+
+data HttpData = Resp (Response String)
+              | Req  (Request String)
+
+instance Eq HttpData where (==) = eqHttpData
+instance Show HttpData where show = showHttpData
+
+instance HasHeaders HttpData where
+    getHeaders (Resp r) = getHeaders r
+    getHeaders (Req r)  = getHeaders r
+    setHeaders (Resp r) = Resp . setHeaders r
+    setHeaders (Req r)  = Req . setHeaders r
+
+showHttpData :: HttpData -> String
+showHttpData (Resp r) = show r
+showHttpData (Req r)  = show r 
+
+eqHttpData :: HttpData -> HttpData -> Bool
+eqHttpData _ _ = False
 
 type TermFun = [Term] -> ThrowsError Term
 
@@ -81,14 +103,6 @@ showError (TypeMismatch expected found) = "Invalid type: expected " ++ expected 
                                           ++ show found
 showError (Parser parseErr)             = "Parse error at " ++ show parseErr
 showError (Default msg)                 = msg
-
-data Type = Blob
-          | Text
-          | HTTPData
-          | Process
-          | ChannelOf Type
-           deriving (Eq, Show)
-
 
 type Env = IORef (Map String Value)
 
@@ -136,11 +150,12 @@ showPi (Atom t)       = show t
 
 showTerm :: Term -> String
 showTerm (TVar x)   = x
-showTerm (TStr str) = "\"" ++ str ++ "\""
+showTerm (TStr str) = str
 showTerm (TNum num) = show num
 showTerm (TBool b ) = map toLower $ show b
--- showTerm (TList ls) = "[" ++ intercalate "," (map show ls) ++ "]"
+showTerm (TList ls) = "[" ++ intercalate "," (map show ls) ++ "]"
 showTerm (TPair (a,b)) = "pair("++ show a ++ ","++ show b ++ ")"
+showTerm (TData d) = show d
 showTerm (TFun n ts _ ) = n ++ "(" ++ intercalate "," (map show ts) ++ ")"
 
 showCond :: Condition -> String

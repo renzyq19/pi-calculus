@@ -1,20 +1,18 @@
 import Network.HTTP
 import Network.URI
-import Network
-import TypDefs
-import System.IO
+import Network.Browser
+import Data.Maybe
+import Channel
 import Control.Monad
-import Control.Concurrent
-
  
 main :: IO ()
 main = do
-    _ <- forkIO $ do
-        s <- listenOn $ PortNumber 9000
-        (_,_,_) <- accept s
-        sClose s
-    h <- connectTo "localhost" (PortNumber 9000)
-    hShow h >>= putStrLn
+    c <- newChan HTTP "www.google.com:80" 8000 
+    let req = fromJust $ httpGetRequest "http://www.google.com/index.html"
+    send c req 
+    msg <- receive c
+    rint $ fromJust $ parseResponseHead [msg]
+    putStrLn msg
     return ()
 
 httpGetRequest :: String -> Maybe String
@@ -25,4 +23,10 @@ httpGetRequest str = do
 receiveHttp :: Channel -> IO [String]
 receiveHttp c = do
         l <- receive c
-        liftM (l :) $ receiveHttp c
+        liftM (l :) receiveHttp 
+
+
+    
+    
+
+    

@@ -4,13 +4,12 @@ import Control.Arrow (second)
 import Control.Concurrent (forkIO, threadDelay)
 import Control.Concurrent.MVar (newEmptyMVar, takeMVar, tryPutMVar)
 import Control.Monad (liftM, liftM2, unless, void)
-import Control.Monad.Error (throwError)
 import Control.Monad.Trans (liftIO)
 import Control.Monad.Trans.Except (catchE, runExceptT, throwE)
 import Data.IORef (newIORef, readIORef,writeIORef)
 import Data.Maybe (isJust)
-import Network.HTTP.Base (Request(..), RequestMethod(..), mkRequest)
-import Network.URI (parseURI)
+import Network.HTTP.Base (parseResponseHead, parseRequestHead)
+import Network.HTTP.Headers (Header, parseHeader, setHeaders)
 import System.Environment (getArgs, getProgName)
 import System.IO (hFlush, stderr, stdin, stdout)
 import System.IO.Error (tryIOError)
@@ -19,6 +18,7 @@ import qualified Data.Map as Map
 
 import Channel
 import Parser
+import Primitives
 import TypDefs
 
 nullEnv :: IO Env
@@ -65,9 +65,9 @@ coreBindings = do
                              ("localnet"     , Chan net)]
                 where 
                     lowestPort = 2^(15::Integer) + 2^(14::Integer)
+
 counterRef :: String
 counterRef = "###"
-
 
 nativeChannels :: [(String   , Channel)]
 nativeChannels = [ ("stdin"  , stdChan stdin) 
@@ -75,77 +75,6 @@ nativeChannels = [ ("stdin"  , stdChan stdin)
                  , ("stderr" , stdChan stderr)
                  ]
 
-primitives :: [(String      , TermFun)]
-primitives = [ ("fst"       , first)
-             , ("snd"       , secnd)
-             , ("hash"      , unaryId "hash")
-             , ("pk"        , unaryId "pk")
-             , ("httpRequest", http)
-             , ("getmsg"    , getmsg)
-             , ("pair"      , binaryId "pair")
-             , ("sdec"      , sdec)
-             , ("senc"      , binaryId "senc")
-             , ("adec"      , adec)
-             , ("aenc"      , binaryId "aenc")
-             , ("sign"      , binaryId "sign")
-             , ("checksign" , checksign)
-             , ("mac"       , binaryId "mac")
-             ]
-
-true :: Term
-true = TBool True
-
-false :: Term
-false = TBool False
-
-constId :: String -> TermFun
-constId name [] = return $ TFun name [] 0
-constId name e  = throwError $ NumArgs name 0 (map Term e)
-
-unaryId :: String -> TermFun
-unaryId name [x] =  return $ TFun name [x] 1
-unaryId name e  = throwError $ NumArgs name 1 (map Term e)
-
-binaryId :: String ->  TermFun
-binaryId name [x,y] = return $ TFun name [x,y] 2 
-binaryId name e  = throwError $ NumArgs name 2 (map Term e)
-
-getmsg :: TermFun
-getmsg [TFun "sign" [_,y] 2] = return y
-getmsg e = throwError $ TypeMismatch "sign" $ map Term e
-
-first :: TermFun
-first [TPair p] = return $ fst p
-first e = throwError $ TypeMismatch "pair" $ map Term e 
-
-secnd :: TermFun
-secnd [TPair p] = return $ snd p
-secnd e = throwError $ TypeMismatch "pair" $ map Term e 
-
-sdec :: TermFun
-sdec [k1, TFun "senc" [k2,y] 2]
-    |k1 == k2  = return y
-    |otherwise = throwError $ Default "keys not the same in sdec"
-sdec e = throwError $ TypeMismatch "(var,senc(var,var))" $ map Term e
-
-adec :: TermFun
-adec [x , TFun "aenc" [TFun "pk" [k] 1, y ] 2]
-    | x == k = return y
-    | otherwise= throwError $ Default "keys not same in adec" 
-adec e = throwError $ TypeMismatch "(var,aenc(pk(var),var))" $ map Term e
-
-checksign :: TermFun
-checksign [TFun "pk" [k1] 1 , TFun "sign" [k2,_] 2 ] = return $ TBool (k1 == k2)
-checksign e = throwError $ TypeMismatch "(pk(var),sign(var,var))" $ map Term e
-
-http :: TermFun
-http [TStr url] = case httpGetRequest http' of
-                        Just x  -> return $ TStr x
-                        Nothing -> throwError $ Default "malformed uri"
-    where
-        http'  = if take 7 url /= http'' then http'' ++ url else url
-        http'' = "http://" 
-http _ = throwError $ Default "undefined"
 
 main :: IO ()
 main = do
@@ -158,8 +87,6 @@ main = do
                     putStrLn           "Use:"
                     putStrLn $ name ++ " -- Enter the REPL"
                     putStrLn $ name ++ " [process] -- Run single process"
-        
-
 
 load :: String -> IOThrowsError [PiProcess]
 load filename = do
@@ -214,10 +141,9 @@ assignFreePort env = do
                 then error "HOW MANY CHANNELS DO YOU WANT?!" 
                 else return port
 
-
 apply :: Value -> [Value] -> IOThrowsError Value 
 apply (PrimitiveFunc fun) args = do
-                        ts <- extracTerms args
+                        ts <- extractTerms args
                         res <- liftThrows $ fun ts
                         return $ Term res
 apply (Func parms bdy closre) args =
@@ -233,8 +159,8 @@ apply (Func parms bdy closre) args =
         num = toInteger . length
 apply e _ = throwE $ NotFunction "expecting a function found" $ show e
 
-extracTerms :: [Value] -> IOThrowsError [Term]
-extracTerms ts
+extractTerms :: [Value] -> IOThrowsError [Term]
+extractTerms ts
         | all isTerm ts = return $ map (\(Term t) -> t) ts
         | otherwise     = throwE $ Default "not all terms"
         
@@ -335,7 +261,6 @@ runIOThrows action = liftM extractValue $ runExceptT (trapError action)
 trapError :: IOThrowsError String -> IOThrowsError String
 trapError action = catchE action (return . show)
 
-
 evalAndPrint :: Env -> String -> IO ()
 evalAndPrint env expr = do
             res <- evalString env expr 
@@ -383,21 +308,36 @@ receiveIn chan = do
 
 receiveAndMatch :: Env -> Term -> Channel -> IOThrowsError ()
 receiveAndMatch env term chan = do
-            str <- liftIO $ receive chan
-            let parsed = readTerm str
-            liftIO $ putStrLn str
-            case parsed of
-                Right t -> matchTerms env t term
-                Left  _ -> do
-                bindings <- match str term
-                newEnv <- liftIO $ bindVars env bindings
-                e <- liftIO $ readIORef newEnv
-                liftIO $ writeIORef env e 
-        where
-        matchTerms :: Env -> Term -> Term -> IOThrowsError ()
-        matchTerms _ _ _ = todo
-        match :: String -> Term -> IOThrowsError [(String,Value)]
-        match _ _ = todo
+        str <- liftIO $ receive chan
+        let ls = lines str
+        bindings <- case term of
+            TFun "httpReq"  args _ -> matchRequestData args ls
+            TFun "httpResp" args _ -> matchResponseData args ls 
+            _                      -> throwE $ Default $ "Can't handle " ++ show term ++ " yet"
+        newE <- liftIO $ bindVars env (map (second Term) bindings)
+        e <- liftIO $ readIORef newE
+        liftIO $ writeIORef env e
+        return ()
+        
+
+matchRequestData :: [Term] -> [String] -> IOThrowsError [(String,Term)]
+matchRequestData [TVar uri, headerss , TVar method] ls = do  
+    (m, r, hs) <- case parseRequestHead ls of
+        Left _         -> throwE $ Default ""
+        Right (m,r,h) -> return (m,r,h)
+    case headerss of
+        TVar h -> return $ zip [uri,h,method] [TStr $ show r, TList $ map (TStr . show) hs , TStr $ show m] 
+        _      -> throwE $ Default "I CAN'T HANDLE THIS SHIT"
+    
+matchResponseData :: [Term] -> [String] -> IOThrowsError [(String,Term)]
+matchResponseData [TVar code, TVar reason, headerss] ls = do  
+    (c, r, hs) <- case parseResponseHead ls of
+        Left _     -> throwE $ Default ""
+        Right (c,r,h) -> return (c,r,h)
+    case headerss of
+        TVar h -> return $ zip [code,reason,h] [TStr $ show c, TStr r,  TList $ map (TStr . show) hs] 
+        _      -> throwE $ Default "I CAN'T HANDLE THIS SHIT"
+
 
 todo :: IOThrowsError a
 todo = throwE $ Default "TODO"
@@ -421,8 +361,3 @@ evalProcess env t = do
             case proc of
                 Proc p -> return p
                 _      -> throwE $ NotProcess $ show t
-                
-httpGetRequest :: String -> Maybe String
-httpGetRequest str = do
-        uri <- parseURI str
-        return $ show (mkRequest GET uri :: Request String)
