@@ -1,4 +1,4 @@
 let google = "www.google.com" in 
 let chan = httpChan(google) in
 let req  = httpReq(google, headers(), httpGet()) in
-out(chan,req);in(chan,httpResp(c,r,hs));out(stdout,hs)
+out(chan,req);in(chan,httpResp(resp));let hs = getHeaders(resp) in out(stdout,hs)

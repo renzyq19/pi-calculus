@@ -32,6 +32,7 @@ primitives = [ ("fst"       , first)
              , ("httpHead"  , constId "httpHead")
              , ("httpPost"  , constId "httpPost")
              , ("getHeaders", getHeadersFromData)
+             , ("setHeader" , setHeader)
              , ("getCookie" , getCookie)
              , ("setCookie" , setCookie)
              ]
@@ -123,8 +124,6 @@ header :: TermFun
 header [TStr n , TStr v] = TStr . show <$> makeHeader (TStr (n ++ ":" ++ v))
 header e = throwError $ TypeMismatch "(headerName, headerValue)" $ map Term e
 
-
-
 makeCookie :: Term -> ThrowsError Cookie
 makeCookie (TStr c) = return $ read c
 makeCookie _ = throwError $ Default "malformed cookie"
@@ -132,6 +131,15 @@ makeCookie _ = throwError $ Default "malformed cookie"
 getHeadersFromData :: TermFun
 getHeadersFromData [TData d] = return $ TList $ map (TStr . show) $ getHeaders d
 getHeadersFromData e = throwError $ TypeMismatch "httpData" $ map Term e
+
+setHeader :: TermFun
+setHeader [h@(TStr _), TData d] = do 
+                      headr <- makeHeader h
+                      let name = hdrName headr
+                      let val  = hdrValue headr
+                      return $ TData $ replaceHeader name val d 
+setHeader [h@(TStr _), TList hs] = return $ TList $ h : hs  
+setHeader e = throwError $ TypeMismatch "(header,httpData|headers)" $ map Term e
 
 getCookie :: TermFun
 getCookie [TData d] = 

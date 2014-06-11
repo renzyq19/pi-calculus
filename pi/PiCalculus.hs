@@ -327,7 +327,7 @@ matchRequestData [TVar uri, headerss , TVar method] ls = do
     case headerss of
         TVar h -> return $ zip [uri,h,method] $ map Term [TStr $ show r, TList $ map (TStr . show) hs , TStr $ show m] 
         _      -> throwE $ Default "I CAN'T HANDLE THIS SHIT"
-matchRequestData [TVar d] ls= do
+matchRequestData [TVar d] ls = do
     (m, r, hs) <- case parseRequestHead ls of
         Left _     -> throwE $ Default ""
         Right (m,r,h) -> return (m,r,h)
@@ -335,22 +335,25 @@ matchRequestData [TVar d] ls= do
 matchRequestData _ _ = todo
     
 matchResponseData :: [Term] -> [String] -> IOThrowsError [(String,Value)]
-matchResponseData [TVar code, TVar reason, headerss] ls = do  
+matchResponseData [TVar code, TVar reason, headerss, TVar bdy] ls = do  
     (c, r, hs) <- case parseResponseHead ls of
         Left _     -> throwE $ Default "Failed to parse httpData"
         Right (c,r,h) -> return (c,r,h)
     case headerss of
-        TVar h -> return $ zip [code,reason,h] $ map Term [TStr $ show c, TStr r,  TList $ map (TStr . show) hs] 
+        TVar h -> return $ zip [code,reason,h,bdy] $ map Term [TStr $ show c, TStr r,  TList $ map (TStr . show) hs,TStr $ msgBody ls] 
         _      -> throwE $ Default "I CAN'T HANDLE THIS SHIT"
 matchResponseData [TVar d] ls = do
     (c, r, hs) <- case parseResponseHead ls of
         Left _     -> throwE $ Default ""
         Right (c,r,h) -> return (c,r,h)
-    return [(d , Term $ TData $ Resp $ Response c r hs "")]
-    
+    return [(d , Term $ TData $ Resp $ Response c r hs (msgBody ls))]
 matchResponseData _ _ = todo
 
 
+msgBody :: [String] -> String
+msgBody = unlines . dropWhile (/= crlf)
+    where
+        crlf = "\r"
 
 todo :: IOThrowsError a
 todo = throwE $ Default "TODO"
