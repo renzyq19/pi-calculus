@@ -17,5 +17,5 @@ cabal-version:       >=1.8
 
 executable phi
   main-is:           PiCalculus.hs
-  other-modules:     Channel, Parser, TypDefs
+  other-modules:     Channel, Parser, Primitives, TypDefs
   build-depends:       base >=4.5 && <=4.8, mtl ==2.2.*, parsec ==3.1.*, containers ==0.5.*, transformers ==0.4.*, network ==2.5.*, HTTP >=2.15, bytestring >= 0.10, io-streams ==1.1.*
