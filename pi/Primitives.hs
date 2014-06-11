@@ -1,9 +1,10 @@
 module Primitives (primitives) where
 
+import Control.Applicative ((<$>))
 import Control.Monad.Error (throwError)
 import Network.HTTP.Base (Request(..), Response(..), RequestMethod(..), mkRequest)
 import Network.HTTP.Cookie (Cookie, cookiesToHeader)
-import Network.HTTP.Headers (Header, HeaderName(..), hdrName, hdrValue, findHeader, parseHeader, replaceHeader, setHeaders)
+import Network.HTTP.Headers (HasHeaders(..), Header, HeaderName(..), hdrName, hdrValue, findHeader, parseHeader, replaceHeader, setHeaders)
 import Network.URI (parseURI)
 
 import TypDefs
@@ -25,10 +26,12 @@ primitives = [ ("fst"       , first)
              , ("checksign" , checksign)
              , ("mac"       , binaryId "mac")
              , ("headers"   , listId)
+             , ("header"    , header)
              , ("cookies"   , listId)
              , ("httpGet"   , constId "httpGet")
              , ("httpHead"  , constId "httpHead")
              , ("httpPost"  , constId "httpPost")
+             , ("getHeaders", getHeadersFromData)
              , ("getCookie" , getCookie)
              , ("setCookie" , setCookie)
              ]
@@ -111,16 +114,24 @@ makeHeader :: Term -> ThrowsError Header
 makeHeader (TFun "cookies" cs _) = do
         cookies <- mapM makeCookie cs 
         return $ cookiesToHeader cookies
-
 makeHeader (TStr s) = case parseHeader s of
             Left _  -> throwError $ Default "malformed header"
             Right h -> return h
 makeHeader _ = throwError $ Default "not a header"
 
+header :: TermFun
+header [TStr n , TStr v] = TStr . show <$> makeHeader (TStr (n ++ ":" ++ v))
+header e = throwError $ TypeMismatch "(headerName, headerValue)" $ map Term e
+
+
+
 makeCookie :: Term -> ThrowsError Cookie
 makeCookie (TStr c) = return $ read c
 makeCookie _ = throwError $ Default "malformed cookie"
 
+getHeadersFromData :: TermFun
+getHeadersFromData [TData d] = return $ TList $ map (TStr . show) $ getHeaders d
+getHeadersFromData e = throwError $ TypeMismatch "httpData" $ map Term e
 
 getCookie :: TermFun
 getCookie [TData d] = 

@@ -8,8 +8,7 @@ import Control.Monad.Trans (liftIO)
 import Control.Monad.Trans.Except (catchE, runExceptT, throwE)
 import Data.IORef (newIORef, readIORef,writeIORef)
 import Data.Maybe (isJust)
-import Network.HTTP.Base (parseResponseHead, parseRequestHead)
-import Network.HTTP.Headers (Header, parseHeader, setHeaders)
+import Network.HTTP.Base (Request(..),Response(..), parseResponseHead, parseRequestHead)
 import System.Environment (getArgs, getProgName)
 import System.IO (hFlush, stderr, stdin, stdout)
 import System.IO.Error (tryIOError)
@@ -103,6 +102,11 @@ evalTerm env (TVar name) = getVar env name
 evalTerm _   (TNum num) = return $ Term $ TNum num
 evalTerm _   (TStr str) = return $ Term $ TStr str
 evalTerm _   (TBool b ) = return $ Term $ TBool b
+evalTerm _   (TData d ) = return $ Term $ TData d
+evalTerm env   (TList ls) = do
+    vs <- mapM (evalTerm env) ls
+    ts <- extractTerms vs
+    return $ Term $ TList ts
 evalTerm env (TPair (t1,t2)) = do
             a <- evalTerm env t1
             b <- evalTerm env t2
@@ -177,12 +181,7 @@ extractValue (Left  e) = error $ show e
 
 eval :: Env -> PiProcess -> IOThrowsError () 
 eval _ Null = return ()
-eval env (In a (TVar name)) = do
-                chan <- evalChan env a
-                received <- receiveIn chan
-                _ <- defineVar env name received 
-                return ()
-eval env (In a b@(TFun{})) = do
+eval env (In a b) = do
                 chan <- evalChan env a
                 receiveAndMatch env b chan
 eval env (Out a b) = do 
@@ -291,20 +290,20 @@ sendOut :: Channel -> Value -> IOThrowsError ()
 sendOut _  (Chan (Channel _ _ False _)) = throwE $ Default "Channel not serialisable" 
 sendOut chan val = liftIO $ send chan $ show val
 
-receiveIn :: Channel -> IOThrowsError Value
-receiveIn chan = do
-        msg  <- liftIO $ receive chan
+matchVar :: String -> String -> IOThrowsError [(String,Value)]
+matchVar name msg = do
         term <- liftThrows $ readTerm msg
-        case term of
-            TFun "<chan>" ex _ -> decodeChannel ex
-            _ -> return $ Term term
-            where
-            decodeChannel e = do
-                let extraStrings = map (\(TStr x) -> x) e
-                let extraData = map (second tail . break (==dataBreak)) extraStrings
-                case getChannelData extraData of
-                    Just (h,p)  -> liftM Chan $ liftIO $ newChan Connect h p
-                    Nothing -> throwE $ Default "incomplete data in channel"
+        v <- case term of
+                TFun "<chan>" ex _ -> decodeChannel ex
+                _ -> return $ Term term
+        return [(name, v)]
+                where
+                decodeChannel e = do
+                    let extraStrings = map (\(TStr x) -> x) e
+                    let extraData = map (second tail . break (==dataBreak)) extraStrings
+                    case getChannelData extraData of
+                        Just (h,p)  -> liftM Chan $ liftIO $ newChan Connect h p
+                        Nothing -> throwE $ Default "incomplete data in channel"
 
 receiveAndMatch :: Env -> Term -> Channel -> IOThrowsError ()
 receiveAndMatch env term chan = do
@@ -313,30 +312,44 @@ receiveAndMatch env term chan = do
         bindings <- case term of
             TFun "httpReq"  args _ -> matchRequestData args ls
             TFun "httpResp" args _ -> matchResponseData args ls 
+            TVar v                 -> matchVar v str
             _                      -> throwE $ Default $ "Can't handle " ++ show term ++ " yet"
-        newE <- liftIO $ bindVars env (map (second Term) bindings)
+        newE <- liftIO $ bindVars env bindings
         e <- liftIO $ readIORef newE
         liftIO $ writeIORef env e
         return ()
         
-
-matchRequestData :: [Term] -> [String] -> IOThrowsError [(String,Term)]
+matchRequestData :: [Term] -> [String] -> IOThrowsError [(String,Value)]
 matchRequestData [TVar uri, headerss , TVar method] ls = do  
     (m, r, hs) <- case parseRequestHead ls of
         Left _         -> throwE $ Default ""
         Right (m,r,h) -> return (m,r,h)
     case headerss of
-        TVar h -> return $ zip [uri,h,method] [TStr $ show r, TList $ map (TStr . show) hs , TStr $ show m] 
+        TVar h -> return $ zip [uri,h,method] $ map Term [TStr $ show r, TList $ map (TStr . show) hs , TStr $ show m] 
         _      -> throwE $ Default "I CAN'T HANDLE THIS SHIT"
+matchRequestData [TVar d] ls= do
+    (m, r, hs) <- case parseRequestHead ls of
+        Left _     -> throwE $ Default ""
+        Right (m,r,h) -> return (m,r,h)
+    return [(d , Term $ TData $ Req $ Request r m hs "")]
+matchRequestData _ _ = todo
     
-matchResponseData :: [Term] -> [String] -> IOThrowsError [(String,Term)]
+matchResponseData :: [Term] -> [String] -> IOThrowsError [(String,Value)]
 matchResponseData [TVar code, TVar reason, headerss] ls = do  
+    (c, r, hs) <- case parseResponseHead ls of
+        Left _     -> throwE $ Default "Failed to parse httpData"
+        Right (c,r,h) -> return (c,r,h)
+    case headerss of
+        TVar h -> return $ zip [code,reason,h] $ map Term [TStr $ show c, TStr r,  TList $ map (TStr . show) hs] 
+        _      -> throwE $ Default "I CAN'T HANDLE THIS SHIT"
+matchResponseData [TVar d] ls = do
     (c, r, hs) <- case parseResponseHead ls of
         Left _     -> throwE $ Default ""
         Right (c,r,h) -> return (c,r,h)
-    case headerss of
-        TVar h -> return $ zip [code,reason,h] [TStr $ show c, TStr r,  TList $ map (TStr . show) hs] 
-        _      -> throwE $ Default "I CAN'T HANDLE THIS SHIT"
+    return [(d , Term $ TData $ Resp $ Response c r hs "")]
+    
+matchResponseData _ _ = todo
+
 
 
 todo :: IOThrowsError a
