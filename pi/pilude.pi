@@ -1,3 +1,4 @@
 let triple(a,b,c) = pair(a,pair(b,c))
 let print(msg) = out(stdout,msg)
 let error(msg) = out(stderr,msg)
+let forever(process) = &process;&forever(process)
