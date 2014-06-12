@@ -33,12 +33,16 @@ primitives = [ ("fst"       , first)
              , ("httpPost"  , constId "httpPost")
              , ("getHeaders", getHeadersFromData)
              , ("setHeader" , setHeader)
+             , ("getHeader" , getHeader)
              , ("getCookie" , getCookie)
              , ("setCookie" , setCookie)
              , ("uri"       , makeUri)
              , ("rspCode"   , responseCode)
+             , ("add"       , add)
+             , ("cons"      , cons)
+             , ("head"      , head')
+             , ("tail"      , tail')
              ]
-
 
 constId :: String -> TermFun
 constId name [] = return $ TFun name []
@@ -135,6 +139,16 @@ getHeadersFromData :: TermFun
 getHeadersFromData [TData d] = return $ TList $ map (TStr . show) $ getHeaders d
 getHeadersFromData e = throwError $ TypeMismatch "httpData" $ map Term e
 
+getHeader :: TermFun
+getHeader [TStr headr, TData d] = do
+        h <- case parseHeader $ headr ++ ":" of
+            Right h -> return h
+            _       -> throwError $ Default $ "Not a header: " ++ headr
+        case findHeader (hdrName h) d of 
+            Just hr -> return $ TStr hr
+            _       -> throwError $ Default $ headr ++ " not in " ++ show d
+getHeader e = throwError $ TypeMismatch "httpData" $ map Term e
+
 setHeader :: TermFun
 setHeader [h@(TStr _), TData d] = do 
                       headr <- makeHeader h
@@ -172,3 +186,21 @@ responseCode e = throwError $ TypeMismatch "(string,string)" $ map Term e
 
 digits :: Integer -> [Int]
 digits n = map (read . return) $ show n
+
+add :: TermFun
+add [TNum a, TNum b] = return $ TNum $ a + b
+add e = throwError $ TypeMismatch "(num,num)" $ map Term e
+
+cons :: TermFun
+cons [a, TList x] = return $ TList (a:x)
+cons e = throwError $ TypeMismatch "list" $ map Term e
+
+head' :: TermFun
+head' [TList []] = throwError $ Default "head of empty list" 
+head' [TList xs] = return $ head xs
+head' e = throwError $ TypeMismatch "list" $ map Term e
+
+tail' :: TermFun
+tail' [TList []] = throwError $ Default "tail of empty list" 
+tail' [TList x] = return $ TList $ tail x
+tail' e = throwError $ TypeMismatch "list" $ map Term e

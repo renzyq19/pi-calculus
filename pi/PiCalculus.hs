@@ -256,6 +256,10 @@ eval env (Let (TVar name _) proc@(Proc _) (Just p)) = do
 eval env (Let (TVar name _) proc@(Proc _) Nothing) = do
                 _ <- defineVar env name proc
                 return ()
+eval env (Let (TFun name args) t2 (Just p)) = 
+            defineLocalFun env name args t2 p
+eval env (Let (TFun name args) t2 Nothing)  = 
+            defineGlobalFun env name args t2
 eval env (Let t1 (Term t2) (Just p)) = do
                 val <- evalTerm env t2 
                 case val of 
@@ -271,10 +275,6 @@ eval env (Let t1 (Term t2) Nothing) = do
                         bindings <- liftThrows $ match t1 term
                         mapM_ (uncurry (defineVar env)) bindings
                     _         -> throwE $ Default "Can only pattern match against Terms"
-eval env (Let (TFun name args) t2 (Just p)) = 
-            defineLocalFun env name args t2 p
-eval env (Let (TFun name args) t2 Nothing)  = 
-            defineGlobalFun env name args t2
 eval env (Atom (TFun "load" [TStr file])) = do
             procs <- load file  
             eval env $ foldl Seq Null procs
