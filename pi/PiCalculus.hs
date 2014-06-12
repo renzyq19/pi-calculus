@@ -249,7 +249,7 @@ eval env (Let (TFun name args) t2 Nothing)  =
 eval env (Atom (TFun "load" [TStr file])) = do
             procs <- load file  
             eval env $ foldl Seq Null procs
-eval env (Atom (TVar "env")) = do
+eval env (Atom (TVar "env" Nothing)) = do
             e <- liftIO $ readIORef env
             liftIO $ mapM_ (\(k,v) -> putStrLn $ k ++ ": " ++ show v) $ Map.toAscList e
 eval env (Atom p@(TFun{})) = void $ evalProcess env p
@@ -391,3 +391,4 @@ evalProcess env t = do
             case proc of
                 Proc p -> return p
                 _      -> throwE $ NotProcess $ show t
+
