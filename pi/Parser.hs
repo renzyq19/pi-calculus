@@ -139,8 +139,9 @@ parseTFun = do
             spaces
             args <- bracketed $ sepBy parseTerm paddedComma
             return $ case (name,args) of
-                ("pair", t1:t2:_)  -> TPair  (t1,t2)
-                _                  -> TFun name args 
+                ("pair", t1:t2:_)  -> TPair (t1,t2)
+                ("list", _ )       -> TList args
+                _                  -> TFun  name args 
 
 parseTStr :: Parser Term
 parseTStr = do

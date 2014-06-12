@@ -257,12 +257,20 @@ eval env (Let (TVar name _) proc@(Proc _) Nothing) = do
                 _ <- defineVar env name proc
                 return ()
 eval env (Let t1 (Term t2) (Just p)) = do
-                bindings <- liftThrows $ match t1 t2
-                newEnv <- liftIO $ bindVars env bindings
-                eval newEnv p
+                val <- evalTerm env t2 
+                case val of 
+                    Term term -> do
+                        bindings <- liftThrows $ match t1 term
+                        newEnv <- liftIO $ bindVars env bindings
+                        eval newEnv p
+                    _         -> throwE $ Default "Can only pattern match against Terms"
 eval env (Let t1 (Term t2) Nothing) = do 
-                bindings <- liftThrows $ match t1 t2
-                mapM_ (uncurry (setVar env)) bindings
+                val <- evalTerm env t2 
+                case val of 
+                    Term term -> do
+                        bindings <- liftThrows $ match t1 term
+                        mapM_ (uncurry (setVar env)) bindings
+                    _         -> throwE $ Default "Can only pattern match against Terms"
 eval env (Let (TFun name args) t2 (Just p)) = 
             defineLocalFun env name args t2 p
 eval env (Let (TFun name args) t2 Nothing)  = 
