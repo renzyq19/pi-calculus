@@ -135,7 +135,7 @@ parseTFun = do
             args <- bracketed $ sepBy parseTerm paddedComma
             return $ case (name,args) of
                 ("pair", t1:t2:_)  -> TPair  (t1,t2)
-                _                  -> TFun name args (length args) 
+                _                  -> TFun name args 
 
 parseTStr :: Parser Term
 parseTStr = do
@@ -168,8 +168,8 @@ parseTerm =  try parseAnonChan
                 arg <- many digit
                 paddedChar ')'
                 case arg of
-                    [] -> return $ TFun "anonChan" [] 0
-                    _  -> return $ TFun "anonChan" [TNum (read arg)] 1
+                    [] -> return $ TFun "anonChan" []
+                    _  -> return $ TFun "anonChan" [TNum (read arg)]
 
 parseProcesses :: Parser [PiProcess]
 parseProcesses = sepEndBy parseProcess newline

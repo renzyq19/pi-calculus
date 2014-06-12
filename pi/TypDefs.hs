@@ -43,7 +43,7 @@ data Term = TVar Name
           | TPair (Term, Term)
           | TList [Term]
           | TData HttpData
-          | TFun Name [Term] Int
+          | TFun Name [Term]
             deriving (Eq)
 
 data HttpData = Resp (Response String)
@@ -121,7 +121,7 @@ showValue (Proc p)  = show p
 showValue (Term t)  = show t
 showValue (Chan c)  = show $ convert c
     where 
-        convert ch = TFun "<chan>" (map TStr ex) $ length ex
+        convert ch = TFun "<chan>" (map TStr ex) 
             where ex = extra ch
 showValue (PrimitiveFunc _)  = "<primitive>" 
 showValue (Func {})          = "<user function>"  
@@ -155,7 +155,7 @@ showTerm (TBool b ) = map toLower $ show b
 showTerm (TList ls) = "[" ++ intercalate "," (map show ls) ++ "]"
 showTerm (TPair (a,b)) = "pair("++ show a ++ ","++ show b ++ ")"
 showTerm (TData d) = show d
-showTerm (TFun n ts _ ) = n ++ "(" ++ intercalate "," (map show ts) ++ ")"
+showTerm (TFun n ts) = n ++ "(" ++ intercalate "," (map show ts) ++ ")"
 
 showCond :: Condition -> String
 showCond (t1 `Equals` t2) = show t1 ++ " == " ++ show t2

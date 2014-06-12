@@ -38,22 +38,22 @@ primitives = [ ("fst"       , first)
              ]
 
 constId :: String -> TermFun
-constId name [] = return $ TFun name [] 0
+constId name [] = return $ TFun name []
 constId name e  = throwError $ NumArgs name 0 (map Term e)
 
 unaryId :: String -> TermFun
-unaryId name [x] =  return $ TFun name [x] 1
+unaryId name [x] =  return $ TFun name [x] 
 unaryId name e  = throwError $ NumArgs name 1 (map Term e)
 
 binaryId :: String ->  TermFun
-binaryId name [x,y] = return $ TFun name [x,y] 2 
+binaryId name [x,y] = return $ TFun name [x,y] 
 binaryId name e  = throwError $ NumArgs name 2 (map Term e)
 
 listId :: TermFun
 listId ts = return $ TList ts
 
 getmsg :: TermFun
-getmsg [TFun "sign" [_,y] 2] = return y
+getmsg [TFun "sign" [_,y]] = return y
 getmsg e = throwError $ TypeMismatch "sign" $ map Term e
 
 first :: TermFun
@@ -65,19 +65,19 @@ secnd [TPair p] = return $ snd p
 secnd e = throwError $ TypeMismatch "pair" $ map Term e 
 
 sdec :: TermFun
-sdec [k1, TFun "senc" [k2,y] 2]
+sdec [k1, TFun "senc" [k2,y]]
     |k1 == k2  = return y
     |otherwise = throwError $ Default "keys not the same in sdec"
 sdec e = throwError $ TypeMismatch "(var,senc(var,var))" $ map Term e
 
 adec :: TermFun
-adec [x , TFun "aenc" [TFun "pk" [k] 1, y ] 2]
+adec [x , TFun "aenc" [TFun "pk" [k], y ]]
     | x == k = return y
     | otherwise= throwError $ Default "keys not same in adec" 
 adec e = throwError $ TypeMismatch "(var,aenc(pk(var),var))" $ map Term e
 
 checksign :: TermFun
-checksign [TFun "pk" [k1] 1 , TFun "sign" [k2,_] 2 ] = return $ TBool (k1 == k2)
+checksign [TFun "pk" [k1], TFun "sign" [k2,_] ] = return $ TBool (k1 == k2)
 checksign e = throwError $ TypeMismatch "(pk(var),sign(var,var))" $ map Term e
 
 httpReq :: TermFun
@@ -96,7 +96,7 @@ httpReq [TStr url, TList hs , reqMethod] = do
             | reqMethod == constFun "httpHead" = HEAD 
             | reqMethod == constFun "httpPost" = POST 
             | otherwise = GET
-            where constFun x = TFun x [] 0 
+            where constFun x = TFun x [] 
 httpReq e = throwError $ TypeMismatch "(url,headers,method)" $ map Term e
 
 httpResp :: TermFun
@@ -112,7 +112,7 @@ makeHeaders :: [Term] -> ThrowsError [Header]
 makeHeaders = mapM makeHeader
 
 makeHeader :: Term -> ThrowsError Header
-makeHeader (TFun "cookies" cs _) = do
+makeHeader (TFun "cookies" cs) = do
         cookies <- mapM makeCookie cs 
         return $ cookiesToHeader cookies
 makeHeader (TStr s) = case parseHeader s of

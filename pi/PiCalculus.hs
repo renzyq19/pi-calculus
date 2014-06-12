@@ -114,22 +114,21 @@ evalTerm env (TPair (t1,t2)) = do
             case (a,b) of 
                 (Term c, Term d) -> return $ Term $ TPair (c,d)
                 _                -> throwE $ Default "pair not given two terms"
-evalTerm env (TFun "anonChan" [] 0) = do
+evalTerm env (TFun "anonChan" []) = do
             port <- assignFreePort env
             liftM Chan $ liftIO $ newChan Init "localhost" port 
-evalTerm env (TFun "anonChan" [n] 1) = do
+evalTerm env (TFun "anonChan" [n]) = do
             port <- evalToInt env n
             c <- liftIO $ newChan Init "localhost" port 
             return $ Chan c
-evalTerm env (TFun "httpChan" [a] 1) = do
+evalTerm env (TFun "httpChan" [a]) = do
             host <- evalToString env a
-            port <- assignFreePort env
-            liftM Chan $ liftIO $ newChan Connect host  port
-evalTerm env (TFun "chan" [a] 1) = do
+            liftM Chan $ liftIO $ newChan Connect host 80
+evalTerm env (TFun "chan" [a,n]) = do
             host <- evalToString env a
-            port <- assignFreePort env
+            port <- evalToInt env n
             liftM Chan $ liftIO $ newChan Connect host port
-evalTerm env (TFun name args _) = do
+evalTerm env (TFun name args) = do
             fun <- getVar env name
             argVals <- mapM (evalTerm env) args
             apply fun argVals
@@ -235,11 +234,11 @@ eval env (Let (TVar name) proc@(Proc _) (Just p)) = do
 eval env (Let (TVar name) proc@(Proc _) Nothing) = do
                 _ <- defineVar env name proc
                 return ()
-eval env (Let (TFun name args _) t2 (Just p)) = 
+eval env (Let (TFun name args) t2 (Just p)) = 
             defineLocalFun env name args t2 p
-eval env (Let (TFun name args _) t2 Nothing)  = 
+eval env (Let (TFun name args) t2 Nothing)  = 
             defineGlobalFun env name args t2
-eval env (Atom (TFun "load" [TStr file] 1)) = do
+eval env (Atom (TFun "load" [TStr file])) = do
             procs <- load file  
             eval env $ foldl Seq Null procs
 eval env (Atom (TVar "env")) = do
@@ -307,7 +306,7 @@ matchVar :: String -> String -> IOThrowsError [(String,Value)]
 matchVar name msg = do
         term <- liftThrows $ readTerm msg
         v <- case term of
-                TFun "<chan>" ex _ -> decodeChannel ex
+                TFun "<chan>" ex -> decodeChannel ex
                 _ -> return $ Term term
         return [(name, v)]
                 where
@@ -323,10 +322,10 @@ receiveAndMatch env term chan = do
         str <- liftIO $ receive chan
         let ls = lines str
         bindings <- case term of
-            TFun "httpReq"  args _ -> matchRequestData args ls
-            TFun "httpResp" args _ -> matchResponseData args ls 
-            TVar v                 -> matchVar v str
-            _                      -> throwE $ Default $ "Can't handle " ++ show term ++ " yet"
+            TFun "httpReq"  args -> matchRequestData args ls
+            TFun "httpResp" args -> matchResponseData args ls 
+            TVar v               -> matchVar v str
+            _                    -> throwE $ Default $ "Can't handle " ++ show term ++ " yet"
         newE <- liftIO $ bindVars env bindings
         e <- liftIO $ readIORef newE
         liftIO $ writeIORef env e
