@@ -8,7 +8,7 @@ import Control.Monad (liftM)
 import Control.Monad.Error (throwError)
 import Text.ParserCombinators.Parsec
 
-import TypDefs (Condition (..), PiProcess (..), Term (..), Value(..), Name, PiError(Parser), ThrowsError)
+import TypDefs (Condition (..), PiProcess (..), Term (..), Type(..), Value(..), Name, PiError(Parser), ThrowsError)
 
 parseNull :: Parser PiProcess
 parseNull = char '0' >> return Null <?> "parse null"
@@ -44,6 +44,9 @@ parseReplicate = do
 myOption :: Show b => a -> Parser a -> Parser b -> Parser a
 myOption opt parser sep = try (notFollowedBy sep >> return opt) <|> (sep >> parser)
 
+myOptionMaybe :: Show b => Parser a -> Parser b -> Parser (Maybe a)
+myOptionMaybe parser = myOption Nothing (liftM Just parser)
+
 parseSeq :: PiProcess -> Parser PiProcess
 parseSeq p1 = do
             p2 <- myOption Null parseProcess (paddedChar ';')
@@ -76,7 +79,7 @@ parseLet = do
             name <- parseTerm
             paddedChar1 '='
             val <- try (liftM Proc parseProcess) <|> liftM Term parseTerm
-            p <- myOption Nothing (liftM Just parseProcess) (paddedStr1 "in") 
+            p <- myOptionMaybe parseProcess (paddedStr1 "in") 
             return $ Let name val p
             <?> "parse let"
 
@@ -123,10 +126,12 @@ parseCondition = do
 parseTVar :: Parser Term
 parseTVar = do
         v <- readVar
-        return $ case v of
-            "true"  -> TBool True
-            "false" -> TBool False
-            _       -> TVar v
+        case v of
+            "true"  -> return $ TBool True
+            "false" -> return $ TBool False
+            _       -> do
+                t <- myOptionMaybe parseType (paddedChar ':') 
+                return $ TVar v t
 
 parseTFun :: Parser Term
 parseTFun = do
@@ -164,11 +169,11 @@ parseTerm =  try parseAnonChan
          <|> parseTStr
          where
             parseAnonChan = do
-                char '{'
+                _ <- char '{'
                 spaces
                 arg <- many parseTerm
                 spaces
-                char '}'
+                _ <- char '}'
                 return $ TFun "anonChan" arg
 
 parseProcesses :: Parser [PiProcess]
@@ -188,6 +193,18 @@ parseProcess = liftM (\ps -> case ps of
                  <|> parseReplicate
                  <|> parseNew
                  <|> parseAtom
+
+
+
+parseType :: Parser Type
+parseType =  try (str HttpRequest)
+         <|> try (str HttpResponse)
+         <|> try (str Header)
+         <|> parseListType
+         where
+         str t = string (show t) >> return t
+         parseListType = string "List" >> many1 space >> fmap List parseType 
+        
 
 bracketed :: Parser a -> Parser a
 bracketed = between (char '(') (char ')')

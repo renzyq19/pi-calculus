@@ -5,6 +5,7 @@ module TypDefs (
     HttpData   (..), 
     Condition  (..),
     Value      (..),
+    Type       (..),
     Channel    (..),
     BuildType  (..),
     PiError    (..),
@@ -36,7 +37,7 @@ data PiProcess = Null
                | Atom Term
                  deriving (Eq)
 
-data Term = TVar Name
+data Term = TVar Name (Maybe Type)
           | TStr String
           | TNum Integer
           | TBool Bool
@@ -91,6 +92,9 @@ data PiError = NumArgs Name Integer [Value]
 
 data Type = HttpRequest
           | HttpResponse
+          | Header
+          | List Type
+          deriving (Eq, Read, Show)
 
 instance Show PiError where show = showError
 
@@ -151,7 +155,9 @@ showPi (Let n t p)    = "let " ++ show n ++ " = " ++ show t ++ case p of {Nothin
 showPi (Atom t)       = show t
 
 showTerm :: Term -> String
-showTerm (TVar x)   = x
+showTerm (TVar x t) = x ++ (case t of 
+                                Nothing -> ""
+                                Just ty -> ": " ++ show ty)
 showTerm (TStr str) = str
 showTerm (TNum num) = show num
 showTerm (TBool b ) = map toLower $ show b
