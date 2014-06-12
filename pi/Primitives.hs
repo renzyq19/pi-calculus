@@ -35,7 +35,10 @@ primitives = [ ("fst"       , first)
              , ("setHeader" , setHeader)
              , ("getCookie" , getCookie)
              , ("setCookie" , setCookie)
+             , ("uri"       , makeUri)
+             , ("rspCode"   , responseCode)
              ]
+
 
 constId :: String -> TermFun
 constId name [] = return $ TFun name []
@@ -100,10 +103,10 @@ httpReq [TStr url, TList hs , reqMethod] = do
 httpReq e = throwError $ TypeMismatch "(url,headers,method)" $ map Term e
 
 httpResp :: TermFun
-httpResp [TStr code, TStr reason , TList hs ,TStr bdy] = do
+httpResp [TNum code, TStr reason , TList hs ,TStr bdy] = do
         headers <- makeHeaders hs
         return $ TData $ Resp $ Response (parseCode code) reason headers bdy
-        where parseCode c =  case map (read . return) c of 
+        where parseCode c =  case digits c of 
                                     [x,y,z] -> (x,y,z)
                                     _       -> (-1,-1,-1)
 httpResp e = throwError $ TypeMismatch "(code,reason,headers,body)" $ map Term e
@@ -157,4 +160,15 @@ setCookie [TData d, c] = do
     return $ TData $ replaceHeader n s d 
 setCookie e = throwError $ TypeMismatch "(httpData, cookie)" $ map Term e
 
+makeUri :: TermFun
+makeUri [TStr host,TStr path] = return $ TStr $ host ++ "/" ++ path
+makeUri e = throwError $ TypeMismatch "(string,string)" $ map Term e
 
+responseCode :: TermFun
+responseCode [TData d] = case d of
+                        Req  _ -> throwError $ Default "Trying to extract Response Code from HttpRequest"
+                        Resp r -> return $ TNum $ let (x,y,z) = rspCode r in fromIntegral (100 * x + 10 * y + z)
+responseCode e = throwError $ TypeMismatch "(string,string)" $ map Term e
+
+digits :: Integer -> [Int]
+digits n = map (read . return) $ show n

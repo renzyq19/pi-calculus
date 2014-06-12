@@ -1,5 +1,5 @@
 let google = "www.google.com" in
 let gChan  = httpChan(google) in
-let req    = httpReq(google,headers(),httpGet()) in
-out(gChan,req);in(gChan,resp:HttpResponse); let list(_,_,_,body) = resp in
-out(stdout,body)
+let req    = httpReq(uri(google,"index.html"),headers(),httpGet()) in
+out(gChan,req);in(gChan,resp:HttpResponse); let list(c,r,hs,body) = resp in
+if c = 302 then out(stdout,"Moved") else out(stdout,body)

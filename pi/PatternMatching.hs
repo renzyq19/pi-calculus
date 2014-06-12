@@ -27,9 +27,9 @@ dataToList (Req r) = TList [TStr uri, TList headers, method]
                     GET  -> TFun "httpGet"  []
                     POST -> TFun "httpPost" []
                     _    -> TFun "httpGet"  []
-dataToList (Resp r) = TList [TStr code, TStr reason, TList headers, TStr bdy]
+dataToList (Resp r) = TList [TNum code, TStr reason, TList headers, TStr bdy]
     where
-        code = let (x,y,z) = rspCode r in concatMap show [x,y,z]
+        code = let (x,y,z) = rspCode r in fromIntegral (100*x + 10* y + z) 
         reason = rspReason r
         headers = map (TStr . show) $ rspHeaders r
         bdy = rspBody r
