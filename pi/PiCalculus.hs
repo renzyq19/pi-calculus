@@ -135,17 +135,27 @@ evalTerm env (TFun name args) = do
 
 evalToString :: Env -> Term -> IOThrowsError String
 evalToString env t = do
-            str <- evalTerm env t
+            s <- evalTerm env t
+            str <- extractTerm s
+            extractString str
+
+extractString :: Term -> IOThrowsError String
+extractString str =
             case str of 
-                Term (TStr s) -> return s
-                _             -> throwE $ Default $ "Not a string : " ++ show t
+                TStr s -> return s
+                _      -> throwE $ Default $ "Not a string : " ++ show str 
 
 evalToInt :: Env -> Term -> IOThrowsError Integer
 evalToInt env t = do
-            num <- evalTerm env t
+            n <- evalTerm env t
+            num <- extractTerm n
+            extractInt num
+
+extractInt :: Term -> IOThrowsError Integer
+extractInt num = 
             case num of 
-                Term (TNum n) -> return n
-                _             -> throwE $ Default $ "Not a number : " ++ show t
+                TNum n -> return n
+                _      -> throwE $ Default $ "Not a number : " ++ show num
 
 assignFreePort :: Env -> IOThrowsError Integer
 assignFreePort env = do
@@ -174,13 +184,11 @@ apply (Func parms bdy closre) args =
 apply e _ = throwE $ NotFunction "expecting a function found" $ show e
 
 extractTerms :: [Value] -> IOThrowsError [Term]
-extractTerms ts
-        | all isTerm ts = return $ map (\(Term t) -> t) ts
-        | otherwise     = throwE $ Default "not all terms"
-        
-isTerm :: Value -> Bool
-isTerm (Term _) = True
-isTerm _ = False
+extractTerms = mapM extractTerm
+
+extractTerm :: Value -> IOThrowsError Term
+extractTerm (Term t) = return t
+extractTerm e        = throwE $ Default $ "Trying to extract term from: " ++ show e
         
 liftThrows :: ThrowsError a -> IOThrowsError a
 liftThrows = either throwE return 
@@ -311,9 +319,8 @@ matchVar name msg = do
         return [(name, v)]
                 where
                 decodeChannel e = do
-                    let extraStrings = map (\(TStr x) -> x) e
-                    let extraData = map (second tail . break (==dataBreak)) extraStrings
-                    case getChannelData extraData of
+                    extraStrings <-  mapM extractString e
+                    case getChannelData extraStrings of
                         Just (h,p)  -> liftM Chan $ liftIO $ newChan Connect h p
                         Nothing -> throwE $ Default "incomplete data in channel"
 
@@ -370,11 +377,6 @@ msgBody = unlines . dropWhile (/= crlf)
 todo :: IOThrowsError a
 todo = throwE $ Default "TODO"
 
-getChannelData :: [(String,String)] -> Maybe (String, Integer)
-getChannelData ex = do
-        host         <- lookup "host" ex
-        cp           <- lookup "clientPort" ex
-        return (host,read cp)
 
 evalChan :: Env -> Term -> IOThrowsError Channel
 evalChan env t = do

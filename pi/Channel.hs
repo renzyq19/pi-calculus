@@ -3,10 +3,11 @@ module Channel  (
     newChan        ,
     newDummyChan   ,
     serialisable   ,  
-    dataBreak      )
+    getChannelData )
     where
 
 import Control.Applicative ((<$>))
+import Control.Arrow (second)
 import Control.Concurrent (forkIO,threadDelay)
 import Control.Concurrent.MVar
 import qualified Control.Concurrent.Chan as Ch
@@ -63,7 +64,7 @@ newChanServer cp = N.withSocketsDo $ do
         lineBuffer clientHandle
         putMVar hanVar clientHandle
     currentHost <- getHostName
-    let ex = makeExtra ["host"] [currentHost ++ ":" ++ show cp]
+    let ex = makeExtra [hostSig,portSig] [currentHost, show cp]
     return $ Channel (send' hanVar) (receive' hanVar) ex
 
 newChanClient :: String -> Integer -> IO Channel
@@ -75,7 +76,7 @@ newChanClient hostName hostPort = N.withSocketsDo $ do
         putMVar hanVar serverHandle
     return $ Channel (send' hanVar) (receive' hanVar) ex
     where
-       ex = makeExtra ["host"] [hostName ++ ":" ++ show hostPort]
+       ex = makeExtra [hostSig, portSig] [hostName,  show hostPort]
 
 waitForConnect :: N.HostName -> N.PortID -> IO Handle
 waitForConnect h p = N.connectTo h p `catchIOError`
@@ -110,8 +111,22 @@ lineBuffer h = hSetBuffering h LineBuffering
 dataBreak :: Char
 dataBreak = '#'
 
+hostSig :: String
+hostSig = "host"
+
+portSig :: String
+portSig = "port"
+
 makeExtra :: [String] -> [String] -> [String]
 makeExtra = zipWith (\a b -> (a ++ dataBreak : b))
 
 serialisable :: Channel -> Bool
 serialisable = not . null . extra
+
+
+getChannelData :: [String] -> Maybe (String, Integer)
+getChannelData strs = do
+        let ex = map (second tail . break (==dataBreak)) strs
+        host         <- lookup hostSig ex
+        port         <- lookup portSig ex
+        return (host,read port)
