@@ -1,7 +1,5 @@
-in(a,b)
-out(a, c());0
-in(a,b)|out(a, c())|out(a, c())
-if true == false then 0 else 0
 new sks; new skc; new s; let pks = pk(sks) in let pkc = pk(skc) in (out(c,pks);0) | (out(c,pkc);0)|!(0)|!(0)
+
 in(c,xpk);new k ; out(c, aenc(xpk, sign(sks,k))); in(c,z); if fst(sdec(k, z)) == tag then 0 else 0
-in(c,y);let y' = adec(skc,y) in let yk = getmsg(y') in if checksign(pks, y') == true() then out(c, senc( yk , pair( tag, s))) ; 0 else 0
+
+in(c,y);let y' = adec(skc,y) in let yk = getmsg(y') in if checksign(pks, y') == true then out(c, senc( yk , pair( tag, s))) ; 0 else 0
