@@ -12,7 +12,7 @@ import Control.Concurrent.MVar
 import qualified Control.Concurrent.Chan as Ch
 import Network.BSD (getHostName)
 import qualified Network as N
-import System.IO (Handle, hFlush, hGetLine, hPutStr, hPutStrLn, hReady)
+import System.IO (BufferMode(..), Handle, hFlush, hGetLine, hPutStr, hPutStrLn, hReady, hSetBuffering)
 import System.IO.Error (catchIOError)
 
 import TypDefs (Channel (..), BuildType (..))
@@ -24,12 +24,10 @@ stdChan h = Channel write rd []
         rd = hGetLine h
 
 newChan :: BuildType -> String -> Integer -> IO Channel
-newChan t host cp =
+newChan t host port =
             case t of
-                Init    -> newChanServer cp
-                Connect -> newChanClient hostName hostPort
-               where
-               (hostName, _:hostPort) = break (==':') host
+                Init    -> newChanServer port
+                Connect -> newChanClient host port
 
 newDummyChan :: IO Channel
 newDummyChan = do
@@ -56,33 +54,33 @@ newInternalChan hostName hostPort cp = do
                 hPutStr outHandle v
             return ()-}
 
-
 newChanServer :: Integer -> IO Channel
 newChanServer cp = N.withSocketsDo $ do
     hanVar <- newEmptyMVar
     _ <- forkIO $ do
         sock <- N.listenOn $ N.PortNumber $ fromIntegral cp
-        (inHandle,_,_)  <- N.accept sock
-        putMVar hanVar inHandle
+        (clientHandle,_,_)  <- N.accept sock
+        lineBuffer clientHandle
+        putMVar hanVar clientHandle
     currentHost <- getHostName
-    let ex  = makeExtra ["clientPort"] [show cp]
-    let ex' = ex ++ makeExtra ["host"] [currentHost ++ ":" ++ show cp]
-    return $ Channel (send' hanVar) (receive' hanVar) ex'
+    let ex = makeExtra ["host"] [currentHost ++ ":" ++ show cp]
+    return $ Channel (send' hanVar) (receive' hanVar) ex
 
-newChanClient :: String -> String -> IO Channel
+newChanClient :: String -> Integer -> IO Channel
 newChanClient hostName hostPort = N.withSocketsDo $ do
     hanVar <- newEmptyMVar
     _ <- forkIO $ do
-        outHandle <- waitForConnect hostName $ N.PortNumber $ port hostPort
-        putMVar hanVar outHandle
+        serverHandle <- waitForConnect hostName $ N.PortNumber $ fromIntegral hostPort
+        lineBuffer serverHandle
+        putMVar hanVar serverHandle
     return $ Channel (send' hanVar) (receive' hanVar) ex
     where
-       ex = makeExtra ["host","clientPort"] [hostName ++ ":" ++ hostPort,"-1"]
+       ex = makeExtra ["host"] [hostName ++ ":" ++ show hostPort]
 
 waitForConnect :: N.HostName -> N.PortID -> IO Handle
 waitForConnect h p = N.connectTo h p `catchIOError`
                                     (\_ -> do
-                                        threadDelay 10000
+                                        threadDelay 100000
                                         putStrLn "waiting for connection"
                                         waitForConnect h p)
 
@@ -101,13 +99,13 @@ receive' hanVar = do
 emptyHandle :: Handle -> IO [String]
 emptyHandle h = do
     line <- hGetLine h
-    more <- hReady h
+    more <- hReady h `catchIOError` (\_ -> return False)
     if not more
-        then return []
+        then return [line]
         else (line:) <$> emptyHandle h
 
-port :: String -> N.PortNumber
-port s = fromIntegral (read s :: Integer)
+lineBuffer :: Handle -> IO ()
+lineBuffer h = hSetBuffering h LineBuffering
 
 dataBreak :: Char
 dataBreak = '#'

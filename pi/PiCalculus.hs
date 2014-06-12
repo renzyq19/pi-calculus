@@ -116,19 +116,19 @@ evalTerm env (TPair (t1,t2)) = do
                 _                -> throwE $ Default "pair not given two terms"
 evalTerm env (TFun "anonChan" [] 0) = do
             port <- assignFreePort env
-            liftM Chan $ liftIO $ newChan Init ("localhost:" ++ show port) port 
+            liftM Chan $ liftIO $ newChan Init "localhost" port 
 evalTerm env (TFun "anonChan" [n] 1) = do
             port <- evalToInt env n
-            c <- liftIO $ newChan Init ("localhost:"++ show port) port 
+            c <- liftIO $ newChan Init "localhost" port 
             return $ Chan c
 evalTerm env (TFun "httpChan" [a] 1) = do
-            addr <- evalToString env a
+            host <- evalToString env a
             port <- assignFreePort env
-            liftM Chan $ liftIO $ newChan Connect (addr ++ ":80") port
+            liftM Chan $ liftIO $ newChan Connect host  port
 evalTerm env (TFun "chan" [a] 1) = do
-            addr <- evalToString env a
+            host <- evalToString env a
             port <- assignFreePort env
-            liftM Chan $ liftIO $ newChan Connect addr port
+            liftM Chan $ liftIO $ newChan Connect host port
 evalTerm env (TFun name args _) = do
             fun <- getVar env name
             argVals <- mapM (evalTerm env) args
@@ -298,7 +298,7 @@ flushStr :: String -> IO ()
 flushStr str = putStr str >> hFlush stdout
 
 sendOut :: Channel -> Value -> IOThrowsError () 
-sendOut _  v@(Chan c) = if serialisable c
+sendOut chan v@(Chan c) = if serialisable c
                         then liftIO $ send chan $ show v
                         else throwE $ Default "Channel not serialisable" 
 sendOut chan val = liftIO $ send chan $ show val

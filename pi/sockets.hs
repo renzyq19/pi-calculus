@@ -3,30 +3,24 @@ import Network.URI
 import Network.Browser
 import Data.Maybe
 import Channel
+import TypDefs
 import Control.Monad
+import Control.Concurrent (forkIO)
  
 main :: IO ()
 main = do
-    c <- newChan HTTP "www.google.com:80" 8000 
-    let req = fromJust $ httpGetRequest "http://www.google.com/index.html"
-    send c req 
-    msg <- receive c
-    rint $ fromJust $ parseResponseHead [msg]
-    putStrLn msg
+    let port = 90010
+    _ <- forkIO $ client port
+    _ <- forkIO $ server port
     return ()
 
-httpGetRequest :: String -> Maybe String
-httpGetRequest str = do
-        uri <- parseURI str
-        return $ show (mkRequest GET uri :: Request String)
+client :: Int -> IO ()
+client n = do 
+    let msg = "Message"
+    ch <- newChan Connect ("localhost:" ++ show n) 1
+    send ch msg
 
-receiveHttp :: Channel -> IO [String]
-receiveHttp c = do
-        l <- receive c
-        liftM (l :) receiveHttp 
-
-
-    
-    
-
-    
+server :: Int -> IO ()
+server n = do
+    ch <- newChan Init ("localhost:" ++ show n) (fromIntegral n)
+    receive ch >>= putStrLn
