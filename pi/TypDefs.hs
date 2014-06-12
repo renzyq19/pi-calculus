@@ -5,6 +5,7 @@ module TypDefs (
     HttpData   (..), 
     Condition  (..),
     Value      (..),
+    Type       (..),
     Channel    (..),
     BuildType  (..),
     PiError    (..),
@@ -36,7 +37,7 @@ data PiProcess = Null
                | Atom Term
                  deriving (Eq)
 
-data Term = TVar Name
+data Term = TVar Name (Maybe Type)
           | TStr String
           | TNum Integer
           | TBool Bool
@@ -87,7 +88,14 @@ data PiError = NumArgs Name Integer [Value]
              | NotFunction String String
              | NotChannel String
              | NotProcess String
+             | PatternMatch Term Term
              | Default String
+
+data Type = HttpRequest
+          | HttpResponse
+          | Header
+          | List Type
+          deriving (Eq, Read, Show)
 
 instance Show PiError where show = showError
 
@@ -102,6 +110,7 @@ showError (NumArgs name expected found) = "Expected " ++ show name ++ show expec
 showError (TypeMismatch expected found) = "Invalid type: expected " ++ expected ++ ", found "
                                           ++ show found
 showError (Parser parseErr)             = "Parse error at " ++ show parseErr
+showError (PatternMatch t1 t2)          = "Pattern match failure: cannot match " ++ show t1 ++ " and \n" ++ show t2
 showError (Default msg)                 = msg
 
 type Env = IORef (Map String Value)
@@ -148,7 +157,9 @@ showPi (Let n t p)    = "let " ++ show n ++ " = " ++ show t ++ case p of {Nothin
 showPi (Atom t)       = show t
 
 showTerm :: Term -> String
-showTerm (TVar x)   = x
+showTerm (TVar x t) = x ++ (case t of 
+                                Nothing -> ""
+                                Just ty -> ": " ++ show ty)
 showTerm (TStr str) = str
 showTerm (TNum num) = show num
 showTerm (TBool b ) = map toLower $ show b

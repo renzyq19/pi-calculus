@@ -19,6 +19,7 @@ import Channel
 import Parser
 import Primitives
 import TypDefs
+import PatternMatching
 
 nullEnv :: IO Env
 nullEnv = newIORef Map.empty
@@ -33,7 +34,7 @@ getVar envRef var = do env <- liftIO $ readIORef envRef
                              (Map.lookup var env)
 
 setVar :: Env -> String -> Value -> IOThrowsError Value
-setVar _ "_" _ = return $ Term $ TVar "_" -- to allow wildcard matching
+setVar _ "_" _ = return $ Term $ TVar "_" Nothing -- to allow wildcard matching
 setVar envRef var val = do env <- liftIO $ readIORef envRef
                            maybe (throwE $ UnboundVar "Setting an unbound variable" var)
                                  (return $ liftIO $ writeIORef envRef $ Map.insert var val env)
@@ -99,7 +100,7 @@ evalCond :: Env -> Condition -> IOThrowsError Bool
 evalCond env (t1 `Equals` t2) = liftM2 (==) (evalTerm env t1) (evalTerm env t2)
 
 evalTerm :: Env -> Term -> IOThrowsError Value
-evalTerm env (TVar name) = getVar env name
+evalTerm env (TVar name _) = getVar env name
 evalTerm _   (TNum num) = return $ Term $ TNum num
 evalTerm _   (TStr str) = return $ Term $ TStr str
 evalTerm _   (TBool b ) = return $ Term $ TBool b
@@ -199,9 +200,10 @@ extractValue (Left  e) = error $ show e
 
 eval :: Env -> PiProcess -> IOThrowsError () 
 eval _ Null = return ()
-eval env (In a b) = do
+eval env (In a (TVar b t)) = do
                 chan <- evalChan env a
-                receiveAndMatch env b chan
+                _<- receiveIn chan t
+                return ()
 eval env (Out a b) = do 
                 chan <- evalChan env a
                 bVal <- evalTerm env b
@@ -224,24 +226,27 @@ eval env (Conc procs)  = do
 eval env (p1 `Seq` p2) = do
                 eval env p1
                 eval env p2
-eval env (New var@(TVar name)) = void $ defineVar env name $ Term var
+eval env (New var@(TVar name _)) = void $ defineVar env name $ Term var
 eval env (If b p1 p2) = do
                 cond <- evalCond env b
                 eval env (if cond then p1 else p2)
-eval env (Let (TVar name) (Term t2) (Just p)) = do
+eval env (Let (TVar name _) (Term t2) (Just p)) = do
                 val <- evalTerm env t2 
                 newEnv <- liftIO $ bindVars env [(name,val)]
                 eval newEnv p
-eval env (Let (TVar name) (Term t2) Nothing) = do
+eval env (Let (TVar name _) (Term t2) Nothing) = do
                 val <- evalTerm env t2
                 _ <- defineVar env name val
                 return ()
-eval env (Let (TVar name) proc@(Proc _) (Just p)) = do
+eval env (Let (TVar name _) proc@(Proc _) (Just p)) = do
                 newEnv <- liftIO $ bindVars env [(name,proc)]
                 eval newEnv p
-eval env (Let (TVar name) proc@(Proc _) Nothing) = do
+eval env (Let (TVar name _) proc@(Proc _) Nothing) = do
                 _ <- defineVar env name proc
                 return ()
+eval env (Let t1 (Term t2) (Just p)) = undefined
+eval env (Let t1 (Term t2) Nothing) = undefined
+                
 eval env (Let (TFun name args) t2 (Just p)) = 
             defineLocalFun env name args t2 p
 eval env (Let (TFun name args) t2 Nothing)  = 
@@ -249,7 +254,7 @@ eval env (Let (TFun name args) t2 Nothing)  =
 eval env (Atom (TFun "load" [TStr file])) = do
             procs <- load file  
             eval env $ foldl Seq Null procs
-eval env (Atom (TVar "env")) = do
+eval env (Atom (TVar "env" Nothing)) = do
             e <- liftIO $ readIORef env
             liftIO $ mapM_ (\(k,v) -> putStrLn $ k ++ ": " ++ show v) $ Map.toAscList e
 eval env (Atom p@(TFun{})) = void $ evalProcess env p
@@ -310,64 +315,43 @@ sendOut chan v@(Chan c) = if serialisable c
                         else throwE $ Default "Channel not serialisable" 
 sendOut chan val = liftIO $ send chan $ show val
 
-matchVar :: String -> String -> IOThrowsError [(String,Value)]
-matchVar name msg = do
+
+receiveIn :: Channel -> Maybe Type -> IOThrowsError Value
+receiveIn chan t = do
+        str <- liftIO $ receive chan
+        case t of
+                    Just HttpRequest  -> makeHttpRequest str
+                    Just HttpResponse -> makeHttpResponse str
+                    _                 -> makeVal str
+
+makeHttpRequest :: String -> IOThrowsError Value
+makeHttpRequest str = do
+    let ls = lines str
+    (r,u, hs) <- case parseRequestHead ls of
+        Left _     -> throwE $ Default "Malformed HTTP Request"
+        Right (r,u,h) -> return (r,u,h)
+    return $ Term $ TData $ Req $ Request u r hs (msgBody ls)
+
+makeHttpResponse :: String -> IOThrowsError Value
+makeHttpResponse str = do
+    let ls = lines str
+    (c, r, hs) <- case parseResponseHead ls of
+        Left _     -> throwE $ Default "Malformed HTTP Request"
+        Right (c,r,h) -> return (c,r,h)
+    return $ Term $ TData $ Resp $ Response c r hs (msgBody ls)
+
+makeVal :: String -> IOThrowsError Value
+makeVal msg = do
         term <- liftThrows $ readTerm msg
-        v <- case term of
+        case term of
                 TFun "<chan>" ex -> decodeChannel ex
                 _ -> return $ Term term
-        return [(name, v)]
                 where
                 decodeChannel e = do
                     extraStrings <-  mapM extractString e
                     case getChannelData extraStrings of
                         Just (h,p)  -> liftM Chan $ liftIO $ newChan Connect h p
                         Nothing -> throwE $ Default "incomplete data in channel"
-
-receiveAndMatch :: Env -> Term -> Channel -> IOThrowsError ()
-receiveAndMatch env term chan = do
-        str <- liftIO $ receive chan
-        let ls = lines str
-        bindings <- case term of
-            TFun "httpReq"  args -> matchRequestData args ls
-            TFun "httpResp" args -> matchResponseData args ls 
-            TVar v               -> matchVar v str
-            _                    -> throwE $ Default $ "Can't handle " ++ show term ++ " yet"
-        newE <- liftIO $ bindVars env bindings
-        e <- liftIO $ readIORef newE
-        liftIO $ writeIORef env e
-        return ()
-        
-matchRequestData :: [Term] -> [String] -> IOThrowsError [(String,Value)]
-matchRequestData [TVar uri, headerss , TVar method] ls = do  
-    (m, r, hs) <- case parseRequestHead ls of
-        Left _         -> throwE $ Default ""
-        Right (m,r,h) -> return (m,r,h)
-    case headerss of
-        TVar h -> return $ zip [uri,h,method] $ map Term [TStr $ show r, TList $ map (TStr . show) hs , TStr $ show m] 
-        _      -> throwE $ Default "I CAN'T HANDLE THIS SHIT"
-matchRequestData [TVar d] ls = do
-    (m, r, hs) <- case parseRequestHead ls of
-        Left _     -> throwE $ Default ""
-        Right (m,r,h) -> return (m,r,h)
-    return [(d , Term $ TData $ Req $ Request r m hs "")]
-matchRequestData _ _ = todo
-    
-matchResponseData :: [Term] -> [String] -> IOThrowsError [(String,Value)]
-matchResponseData [TVar code, TVar reason, headerss, TVar bdy] ls = do  
-    (c, r, hs) <- case parseResponseHead ls of
-        Left _     -> throwE $ Default "Failed to parse httpData"
-        Right (c,r,h) -> return (c,r,h)
-    case headerss of
-        TVar h -> return $ zip [code,reason,h,bdy] $ map Term [TStr $ show c, TStr r,  TList $ map (TStr . show) hs,TStr $ msgBody ls] 
-        _      -> throwE $ Default "I CAN'T HANDLE THIS SHIT"
-matchResponseData [TVar d] ls = do
-    (c, r, hs) <- case parseResponseHead ls of
-        Left _     -> throwE $ Default ""
-        Right (c,r,h) -> return (c,r,h)
-    return [(d , Term $ TData $ Resp $ Response c r hs (msgBody ls))]
-matchResponseData _ _ = todo
-
 
 msgBody :: [String] -> String
 msgBody = unlines . dropWhile (/= crlf)
@@ -391,6 +375,3 @@ evalProcess env t = do
             case proc of
                 Proc p -> return p
                 _      -> throwE $ NotProcess $ show t
-
-match :: Env -> Term -> Term -> IOThrowsError Value
-match env (TVar name) term = setVar env name $ Term term
