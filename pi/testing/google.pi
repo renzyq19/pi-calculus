@@ -1,0 +1,5 @@
+let google = "www.google.com" in
+let gChan  = httpChan(google) in
+let req    = httpReq(google,headers(),httpGet()) in
+out(gChan,req);in(gChan,resp:HttpResponse); let list(_,_,_,body) = resp in
+out(stdout,body)

@@ -208,7 +208,7 @@ eval env (In a v@(TVar b t)) = do
                             ch <- decodeChannel ex
                             return [(b,ch)]
                     _ -> liftThrows $ match v term
-                mapM_ (uncurry (setVar env)) bindings
+                mapM_ (uncurry (defineVar env)) bindings
                 return ()
                     where
                     decodeChannel e = do
@@ -269,7 +269,7 @@ eval env (Let t1 (Term t2) Nothing) = do
                 case val of 
                     Term term -> do
                         bindings <- liftThrows $ match t1 term
-                        mapM_ (uncurry (setVar env)) bindings
+                        mapM_ (uncurry (defineVar env)) bindings
                     _         -> throwE $ Default "Can only pattern match against Terms"
 eval env (Let (TFun name args) t2 (Just p)) = 
             defineLocalFun env name args t2 p

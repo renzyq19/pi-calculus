@@ -81,7 +81,7 @@ newChanClient hostName hostPort = N.withSocketsDo $ do
 waitForConnect :: N.HostName -> N.PortID -> IO Handle
 waitForConnect h p = N.connectTo h p `catchIOError`
                                     (\_ -> do
-                                        threadDelay 100000
+                                        threadDelay 1000000
                                         putStrLn "waiting for connection"
                                         waitForConnect h p)
 
