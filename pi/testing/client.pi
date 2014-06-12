@@ -1,0 +1,1 @@
+in(stdin,host);in(stdin,port);let ch = chan(host,port) in out(ch,"Ping!");in(ch,msg);out(stdout,msg)

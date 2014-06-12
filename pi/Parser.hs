@@ -164,12 +164,10 @@ parseTerm =  try parseAnonChan
          <|> parseTStr
          where
             parseAnonChan = do
-                paddedChar '('
-                arg <- many digit
-                paddedChar ')'
-                case arg of
-                    [] -> return $ TFun "anonChan" []
-                    _  -> return $ TFun "anonChan" [TNum (read arg)]
+                paddedChar '{'
+                arg <- many parseTerm
+                paddedChar '}'
+                return $ TFun "anonChan" arg
 
 parseProcesses :: Parser [PiProcess]
 parseProcesses = sepEndBy parseProcess newline

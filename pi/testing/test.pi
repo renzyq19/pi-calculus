@@ -1,2 +1,4 @@
-let a = () in 
-let b = () in (in(b,chan);out(chan,10)|out(a,b);in(b,msg);out(stdout,msg))
+let google = "www.google.com" in 
+let chan = httpChan(google) in
+let req  = httpReq(google, headers(), httpGet()) in
+out(chan,req);in(chan,httpResp(_,_,_,body));out(stdout,body)
