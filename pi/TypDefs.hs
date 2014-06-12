@@ -91,8 +91,6 @@ data PiError = NumArgs Name Integer [Value]
 
 data Type = HttpRequest
           | HttpResponse
-          | Ch
-          | T
 
 instance Show PiError where show = showError
 
