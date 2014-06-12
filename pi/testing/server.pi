@@ -1,4 +1,4 @@
 out(stdout,"Enter port");
 in(stdin,port);
 let ch = {port} in 
-out(stdout,ch);in(ch,msg);out(stdout,msg);out(ch,"Pong!")
+in(ch,msg);out(stdout,msg);out(ch,"Pong!")

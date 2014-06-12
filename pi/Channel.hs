@@ -61,7 +61,6 @@ newChanServer cp = N.withSocketsDo $ do
     _ <- forkIO $ do
         sock <- N.listenOn $ N.PortNumber $ fromIntegral cp
         (clientHandle,_,_)  <- N.accept sock
-        lineBuffer clientHandle
         putMVar hanVar clientHandle
     currentHost <- getHostName
     let ex = makeExtra [hostSig,portSig] [currentHost, show cp]
@@ -72,7 +71,6 @@ newChanClient hostName hostPort = N.withSocketsDo $ do
     hanVar <- newEmptyMVar
     _ <- forkIO $ do
         serverHandle <- waitForConnect hostName $ N.PortNumber $ fromIntegral hostPort
-        lineBuffer serverHandle
         putMVar hanVar serverHandle
     return $ Channel (send' hanVar) (receive' hanVar) ex
     where
@@ -88,25 +86,31 @@ waitForConnect h p = N.connectTo h p `catchIOError`
 send' :: MVar Handle -> String -> IO ()
 send' hanVar msg = do
         han <- takeMVar hanVar
+        putStrLn "sending...."
         hPutStr han msg
+        putStrLn "sent"
         hFlush han
         putMVar hanVar han
 
 receive' :: MVar Handle -> IO String
 receive' hanVar = do
         han <- readMVar hanVar
-        unlines <$> emptyHandle han
+        putStrLn "receiving...."
+        msg <- unlines <$> emptyHandle han
+        putStrLn $ "got : " ++ msg
+        return msg
 
 emptyHandle :: Handle -> IO [String]
 emptyHandle h = do
     line <- hGetLine h
+    putStrLn $ "a line: " ++ line
     more <- hReady h `catchIOError` (\_ -> return False)
     if not more
         then return [line]
         else (line:) <$> emptyHandle h
 
-lineBuffer :: Handle -> IO ()
-lineBuffer h = hSetBuffering h LineBuffering
+--lineBuffer :: Handle -> IO ()
+--lineBuffer h = hSetBuffering h LineBuffering
 
 dataBreak :: Char
 dataBreak = '#'
