@@ -164,11 +164,11 @@ parseTerm =  try parseAnonChan
          <|> parseTStr
          where
             parseAnonChan = do
-                char '{'
+                _ <- char '{'
                 spaces
                 arg <- many parseTerm
                 spaces
-                char '}'
+                _ <- char '}'
                 return $ TFun "anonChan" arg
 
 parseProcesses :: Parser [PiProcess]

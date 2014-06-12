@@ -156,3 +156,5 @@ setCookie [TData d, c] = do
     let s = hdrValue cookieHeader
     return $ TData $ replaceHeader n s d 
 setCookie e = throwError $ TypeMismatch "(httpData, cookie)" $ map Term e
+
+

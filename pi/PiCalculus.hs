@@ -391,3 +391,6 @@ evalProcess env t = do
             case proc of
                 Proc p -> return p
                 _      -> throwE $ NotProcess $ show t
+
+match :: Env -> Term -> Term -> IOThrowsError Value
+match env (TVar name) term = setVar env name $ Term term

@@ -89,9 +89,6 @@ data PiError = NumArgs Name Integer [Value]
              | NotProcess String
              | Default String
 
-data Type = HttpRequest
-          | HttpResponse
-
 instance Show PiError where show = showError
 
 showError :: PiError -> String
