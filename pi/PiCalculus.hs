@@ -200,10 +200,22 @@ extractValue (Left  e) = error $ show e
 
 eval :: Env -> PiProcess -> IOThrowsError () 
 eval _ Null = return ()
-eval env (In a (TVar b t)) = do
+eval env (In a v@(TVar b t)) = do
                 chan <- evalChan env a
-                _<- receiveIn chan t
+                term <- receiveIn chan t
+                bindings <- case term of
+                    TFun "<chan>" ex -> do
+                            ch <- decodeChannel ex
+                            return [(b,ch)]
+                    _ -> liftThrows $ match v term
+                mapM_ (uncurry (setVar env)) bindings
                 return ()
+                    where
+                    decodeChannel e = do
+                        extraStrings <-  mapM extractString e
+                        case getChannelData extraStrings of
+                            Just (h,p)  -> liftM Chan $ liftIO $ newChan Connect h p
+                            Nothing -> throwE $ Default "incomplete data in channel"
 eval env (Out a b) = do 
                 chan <- evalChan env a
                 bVal <- evalTerm env b
@@ -244,9 +256,13 @@ eval env (Let (TVar name _) proc@(Proc _) (Just p)) = do
 eval env (Let (TVar name _) proc@(Proc _) Nothing) = do
                 _ <- defineVar env name proc
                 return ()
-eval env (Let t1 (Term t2) (Just p)) = undefined
-eval env (Let t1 (Term t2) Nothing) = undefined
-                
+eval env (Let t1 (Term t2) (Just p)) = do
+                bindings <- liftThrows $ match t1 t2
+                newEnv <- liftIO $ bindVars env bindings
+                eval newEnv p
+eval env (Let t1 (Term t2) Nothing) = do 
+                bindings <- liftThrows $ match t1 t2
+                mapM_ (uncurry (setVar env)) bindings
 eval env (Let (TFun name args) t2 (Just p)) = 
             defineLocalFun env name args t2 p
 eval env (Let (TFun name args) t2 Nothing)  = 
@@ -316,42 +332,29 @@ sendOut chan v@(Chan c) = if serialisable c
 sendOut chan val = liftIO $ send chan $ show val
 
 
-receiveIn :: Channel -> Maybe Type -> IOThrowsError Value
+receiveIn :: Channel -> Maybe Type -> IOThrowsError Term
 receiveIn chan t = do
         str <- liftIO $ receive chan
         case t of
                     Just HttpRequest  -> makeHttpRequest str
                     Just HttpResponse -> makeHttpResponse str
-                    _                 -> makeVal str
+                    _                 -> liftThrows $ readTerm str
 
-makeHttpRequest :: String -> IOThrowsError Value
+makeHttpRequest :: String -> IOThrowsError Term
 makeHttpRequest str = do
     let ls = lines str
     (r,u, hs) <- case parseRequestHead ls of
         Left _     -> throwE $ Default "Malformed HTTP Request"
         Right (r,u,h) -> return (r,u,h)
-    return $ Term $ TData $ Req $ Request u r hs (msgBody ls)
+    return $ TData $ Req $ Request u r hs (msgBody ls)
 
-makeHttpResponse :: String -> IOThrowsError Value
+makeHttpResponse :: String -> IOThrowsError Term
 makeHttpResponse str = do
     let ls = lines str
     (c, r, hs) <- case parseResponseHead ls of
         Left _     -> throwE $ Default "Malformed HTTP Request"
         Right (c,r,h) -> return (c,r,h)
-    return $ Term $ TData $ Resp $ Response c r hs (msgBody ls)
-
-makeVal :: String -> IOThrowsError Value
-makeVal msg = do
-        term <- liftThrows $ readTerm msg
-        case term of
-                TFun "<chan>" ex -> decodeChannel ex
-                _ -> return $ Term term
-                where
-                decodeChannel e = do
-                    extraStrings <-  mapM extractString e
-                    case getChannelData extraStrings of
-                        Just (h,p)  -> liftM Chan $ liftIO $ newChan Connect h p
-                        Nothing -> throwE $ Default "incomplete data in channel"
+    return $ TData $ Resp $ Response c r hs (msgBody ls)
 
 msgBody :: [String] -> String
 msgBody = unlines . dropWhile (/= crlf)
