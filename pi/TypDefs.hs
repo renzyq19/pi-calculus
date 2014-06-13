@@ -160,7 +160,7 @@ showTerm :: Term -> String
 showTerm (TVar x t) = x ++ (case t of 
                                 Nothing -> ""
                                 Just ty -> ": " ++ show ty)
-showTerm (TStr str) = str
+showTerm (TStr str) = show str
 showTerm (TNum num) = show num
 showTerm (TBool b ) = map toLower $ show b
 showTerm (TList ls) = "list(" ++ intercalate "," (map show ls) ++ ")"
