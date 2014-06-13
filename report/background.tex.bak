@@ -250,7 +250,7 @@ Here we can demonstrate some basic WebSockets functionality. We can use the Hask
 
 \input{sockets.lhs}
 
-This small program creates two processes. The client continuously reads from stdin and then sends the information over the socket, and the server recieves the data from the socket and sends it back. In other words, written in our version of the applied $\pi$-calculus it does:
+This small program creates two processes. The client continuously reads from stdin and then sends the information over the socket, and the server receives the data from the socket and sends it back. In other words, written in our version of the applied $\pi$-calculus it does:
 \begin{verbatim}
     !(in(stdin,x);
     out(socket(0.0.0.0,9000),x);

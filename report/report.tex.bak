@@ -1,5 +1,5 @@
-\documentclass[11pt,a4paper]{article}
-\usepackage[margin=1in]{geometry}
+\documentclass[11pt,a4paper]{combine}
+\usepackage{hyperref}
 \usepackage{graphicx}
 \usepackage{syntax}
 \usepackage{listings}
@@ -29,7 +29,10 @@
 
 \include{./introduction}
 \include{./background}
-\include{./plan}
+\include{./tsAndParser}
+\include{./csAndPs}
+\include{./primitives}
+\include{./patterns}
 \include{./evaluation}
 
 \bibliographystyle{alpha}
