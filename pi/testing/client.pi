@@ -3,7 +3,5 @@ in(stdin,host);
 out(stdout,"Enter port:");
 in(stdin,port);
 let ch = chan("localhost",port) in 
-out(ch,"Ping!")
-
-in(ch,msg);out(stdout,msg)
+out(ch,"Ping!\n");in(ch,msg);out(stdout,msg)
 

@@ -15,7 +15,6 @@ import Network.BSD (getHostName)
 import qualified Network as N
 import System.IO (BufferMode(..), Handle, hFlush, hGetLine, hPutStr, hPutStrLn, hReady, hSetBuffering)
 import System.IO.Error (catchIOError)
-import System.Random (randomRIO)
 
 import TypDefs (Channel (..), BuildType (..))
 
@@ -93,8 +92,7 @@ send' hanVar msg = do
 receive' :: MVar Handle -> IO String
 receive' hanVar = do
         han <- readMVar hanVar
-        msg <- unlines <$> emptyHandle han
-        return msg
+        unlines <$> emptyHandle han
 
 emptyHandle :: Handle -> IO [String]
 emptyHandle h = do
@@ -121,11 +119,6 @@ makeExtra = zipWith (\a b -> (a ++ dataBreak : b))
 
 serialisable :: Channel -> Bool
 serialisable = not . null . extra
-
-randomDelay :: IO ()
-randomDelay = do
-        rand <- randomRIO (1,10) 
-        threadDelay $ rand * 1000000
 
 getChannelData :: [String] -> Maybe (String, Integer)
 getChannelData strs = do
