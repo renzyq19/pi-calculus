@@ -35,26 +35,6 @@ newDummyChan = do
     chan <- Ch.newChan
     return $ Channel (Ch.writeChan chan) (Ch.readChan chan) []
     
-{-newInternalChan :: String -> String -> Integer -> IO Channel
-newInternalChan hostName hostPort cp = do
-    currentHost <- getHostName
-    let ex = makeExtra ["host","clientPort"] [currentHost ++ ":" ++ hostPort,show cp]
-    return $ Channel s r True ex
-    where
-       r   = N.withSocketsDo $ do
-            sock <- N.listenOn $ N.PortNumber $ fromIntegral cp
-            (inHandle,_,_) <- N.accept sock
-            msg <- unlines <$> emptyHandle inHandle
-            putStrLn $ "got: " ++ msg
-            N.sClose sock
-            return msg
-       s v = N.withSocketsDo $ do
-            _ <- forkIO $ do
-                outHandle <- waitForConnect hostName $ N.PortNumber $ port hostPort
-                putStrLn $ "sending: " ++ v
-                hPutStr outHandle v
-            return ()-}
-
 newChanServer :: Integer -> IO Channel
 newChanServer cp = N.withSocketsDo $ do
     hanVar <- newEmptyMVar
