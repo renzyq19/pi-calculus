@@ -1,19 +1,24 @@
 module PatternMatching (match) where            
             
 import Control.Arrow (second) 
-import Control.Monad (liftM,liftM2,zipWithM)
+import Control.Monad (liftM,liftM2)
 import Control.Monad.Error (throwError)
 import TypDefs
-import Parser ()
+import Parser (readTerm)
 import Network.HTTP.Base 
 
 match :: Term -> Term -> ThrowsError [(String,Value)]
-match a b = liftM (map (second Term)) $ match' a b
+match a b = liftM (map (second Term) . filter (\(n,_) -> head n /= '_')) $ match' a b
 
 match' :: Term -> Term -> ThrowsError [(String,Term)]
 match' (TVar name _) term = return [(name,term)]
 match' (TPair (m1, m2)) (TPair (t1,t2)) = liftM2 (++) (match' m1 t1)  (match' m2 t2)
-match' (TList ms) (TList ts) = liftM concat $ zipWithM match' ms ts
+match' (TList (m:ms)) (TList (t:ts)) = do
+                bind <- match' m t
+                rest <- case ms of
+                    [v] -> match' v $ TList ts
+                    _   -> match' (TList ms) (TList ts)
+                return $ bind ++ rest
 match' l@(TList _) (TData d) = match' l $ dataToList d
 match' t1 t2 = throwError $ PatternMatch t1 t2
 
@@ -34,9 +39,9 @@ dataToList (Resp r) = TList [TNum code, TStr reason, TList headers, TStr bdy]
         headers = map (TStr . show) $ rspHeaders r
         bdy = rspBody r
 
-{-testMatch :: String -> String -> ThrowsError [(String,Term)]
+testMatch :: String -> String -> ThrowsError [(String,Value)]
 testMatch s1 s2 = do
     t1 <- readTerm s1
     t2 <- readTerm s2
-    match' t1 t2-}
+    match t1 t2
     
