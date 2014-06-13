@@ -239,9 +239,8 @@ And a demonstration of this in action (removing our custom show instance, as oth
 
 \subsubsection{Sockets and the Network module}
 
-Once we have parsed our input and built our syntax tree, we must then semantically analyse the input and generate the processes required. As mentioned before we will be using the Haskell Network module  for our initial implementation.
-
-Here we can demonstrate some basic functionality using Sockets. We can use the Haskell Network module in the following way:
+Once we have parsed our input and built our syntax tree, we must then semantically analyse the input and generate the processes required. As mentioned before we will be using the Haskell Network module  for our initial implementation. This provides a high-level interface to network functionality in Haskell. We create handles from incoming connections on sockets on the server side, and on the client side we generate a handle by connecting to a foreign host on a specified port. An example
+of this is as follows: 
 
 \input{sockets.lhs}
 
