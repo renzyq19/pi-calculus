@@ -16,11 +16,14 @@ main = do
 
 client :: Int -> IO ()
 client n = do 
-    let msg = "Message"
-    ch <- newChan Connect ("localhost:" ++ show n) 1
+    let msg = "Ping!"
+    ch <- newChan Connect "localhost" (fromIntegral n)
     send ch msg
+    receive ch >>= putStrLn
 
 server :: Int -> IO ()
 server n = do
-    ch <- newChan Init ("localhost:" ++ show n) (fromIntegral n)
+    let msg = "Pong!"
+    ch <- newChan Init "localhost" (fromIntegral n)
     receive ch >>= putStrLn
+    send ch msg

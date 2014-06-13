@@ -15,6 +15,7 @@ import Network.BSD (getHostName)
 import qualified Network as N
 import System.IO (BufferMode(..), Handle, hFlush, hGetLine, hPutStr, hPutStrLn, hReady, hSetBuffering)
 import System.IO.Error (catchIOError)
+import System.Random (randomRIO)
 
 import TypDefs (Channel (..), BuildType (..))
 
@@ -86,28 +87,22 @@ waitForConnect h p = N.connectTo h p `catchIOError`
 send' :: MVar Handle -> String -> IO ()
 send' hanVar msg = do
         han <- takeMVar hanVar
-        putStrLn "sending...."
-        hPutStr han msg
-        putStrLn "sent"
-        hFlush han
+        hPutStrLn han msg
         putMVar hanVar han
 
 receive' :: MVar Handle -> IO String
 receive' hanVar = do
         han <- readMVar hanVar
-        putStrLn "receiving...."
         msg <- unlines <$> emptyHandle han
-        putStrLn $ "got : " ++ msg
         return msg
 
 emptyHandle :: Handle -> IO [String]
 emptyHandle h = do
     line <- hGetLine h
-    putStrLn $ "a line: " ++ line
     more <- hReady h `catchIOError` (\_ -> return False)
-    if not more
-        then return [line]
-        else (line:) <$> emptyHandle h
+    if more
+        then (line:) <$> emptyHandle h
+        else return [line]
 
 --lineBuffer :: Handle -> IO ()
 --lineBuffer h = hSetBuffering h LineBuffering
@@ -127,6 +122,10 @@ makeExtra = zipWith (\a b -> (a ++ dataBreak : b))
 serialisable :: Channel -> Bool
 serialisable = not . null . extra
 
+randomDelay :: IO ()
+randomDelay = do
+        rand <- randomRIO (1,10) 
+        threadDelay $ rand * 1000000
 
 getChannelData :: [String] -> Maybe (String, Integer)
 getChannelData strs = do
