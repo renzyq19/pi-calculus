@@ -35,7 +35,6 @@ getVar envRef var = do env <- liftIO $ readIORef envRef
                              (Map.lookup var env)
 
 setVar :: Env -> String -> Value -> IOThrowsError Value
-setVar _ "_" _ = return $ Term $ TVar "_" Nothing -- to allow wildcard matching
 setVar envRef var val = do env <- liftIO $ readIORef envRef
                            maybe (throwE $ UnboundVar "Setting an unbound variable" var)
                                  (return $ liftIO $ writeIORef envRef $ Map.insert var val env)
@@ -85,7 +84,7 @@ main = do
         pilude <- getDataFileName "pilude.pi"
         case args of
             []  -> runRepl coreBindings
-            [x] -> liftM (("&load("++pilude++");")++) (readFile x) >>= runProcess coreBindings 
+            [x] -> readFile x >>= runProcess coreBindings 
             _   -> do
                     putStrLn           "Use:"
                     putStrLn $ name ++ " -- Enter the REPL"

@@ -1,4 +1,0 @@
-&load("follow.pi");
-out(stdout,"Host:");in(stdin,site);
-let siteChan = httpChan(site) in
-let req = httpReq(uri(site,"index.html"),headers(),httpGet()) in &follow(siteChan,req)
