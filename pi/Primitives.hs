@@ -17,7 +17,6 @@ primitives = [ ("fst"       , first)
              , ("httpReq"   , httpReq)
              , ("httpResp"  , httpResp)
              , ("getmsg"    , getmsg)
-             , ("pair"      , binaryId "pair")
              , ("sdec"      , sdec)
              , ("senc"      , binaryId "senc")
              , ("adec"      , adec)
@@ -166,7 +165,7 @@ getCookie [TData d] =
 getCookie e = throwError $ TypeMismatch "httpData" $ map Term e
     
 setCookie :: TermFun
-setCookie [TData d, c] = do
+setCookie [c, TData d] = do
     cookie <- makeCookie c
     let cookieHeader = cookiesToHeader [cookie]
     let n = hdrName cookieHeader

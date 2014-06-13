@@ -23,5 +23,6 @@
 *.synctex.gz
 *.pdf
 pi-calc.tex
+prims.tex
 *.ptb
 # source: https://gist.github.com/kogakure/149016

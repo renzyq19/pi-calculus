@@ -9,7 +9,7 @@ spellcheck:
 report.pdf: report.aux 
 	$(TEX) report.tex
 
-report.aux: introduction.tex background.tex plan.tex evaluation.tex bibliography.bib pi-calc.lhs
+report.aux: introduction.tex csAndPs.tex primitives.tex patterns.tex tsAndParser.tex background.tex plan.tex evaluation.tex bibliography.bib pi-calc.lhs prims.lhs
 
 
 clean: 

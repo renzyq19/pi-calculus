@@ -95,14 +95,14 @@ As the Pict language did when creating an implementation of pure $\pi$-calculus 
 
 \begin{table}[hc!]
     \begin{tabular}{r c l}
-        $P|Q$& \verb!P | Q!& parallel composition\\
-        $P.Q$& \verb!P ; Q!& sequential composition\\
-        $!P$ & \verb?!P?& replication \\
-        $vn$& \verb!new x!& new \\
-        $if M=N then P else Q $&\verb!if p(M) then P else Q!& conditional \\
-        $u(x)$&\verb!in(u,x)!& input \\
-        $\bar{u}\langle N \rangle .P$&\verb!out(u,N)!& output \\
-        $\left[ \frac{M}{x} \right]$&\verb!let X = M in P!&  active substitution (i.e. pattern matching) \\
+        $P|Q$& \verb!P | Q!\\
+        $P.Q$& \verb!P ; Q!\\
+        $!P$ & \verb?!P?\\
+        $vn$& \verb!new x!\\
+        $if M=N then P else Q $&\verb!if p(M) then P else Q! \\
+        $u(x)$&\verb!in(u,x)! \\
+        $\bar{u}\langle N \rangle .P$&\verb!out(u,N)! \\
+        $\left[ \frac{M}{x} \right]$&\verb!let X = M in P!\\
     \end{tabular}
 \end{table} 
 
@@ -142,13 +142,13 @@ It is also good to note that malformed structures will fail:
         Probable cause: `Out' is applied to too few arguments
         In the second argument of `Seq', namely `(Out "a")'
         In the expression: (In "a" "x") `Seq` (Out "a")
-                                        
 \end{code}
 
 \subsubsection{Parsec}
 
 Parsec is a monadic parser combinator library for Haskell which is fast, robust, simple and well-documented \cite{lm01}. We use parsec by building a series of low-level parsers and combining them into a single high level one.
 For example, if we start with a low-level parser to match brackets, from that we can build a higher level parser which can then return the contents of those brackets as a list of strings:
+
 \begin{code}
 import Text.ParserCombinators.Parsec
 
@@ -234,13 +234,7 @@ And a demonstration of this in action (removing our custom show instance, as oth
     expecting "("
     ghci>parseTest inOut "out(a,b,c)"
     *** Exception: malformed input out(chan,message) expected
-    ghci>parseTest inOut "out (a,b)"
-    parse error at (line 1, column 4):
-    unexpected " "
-    expecting "("
 \end{code}
-
-In the last case it is interesting to note that whitespace is not handled very well. This can be solved by first tokenising the input. The ParsecToken module can be used to generate a tokeniser.
 
 \subsubsection{WebSockets}
 
