@@ -1,4 +1,4 @@
-module PatternMatching (match) where            
+module PatternMatching (match, matchTest) where            
             
 import Control.Arrow (second) 
 import Control.Monad (liftM,liftM2)
@@ -8,10 +8,12 @@ import Parser (readTerm)
 import Network.HTTP.Base 
 
 match :: Term -> Term -> ThrowsError [(String,Value)]
-match a b = liftM (map (second Term) . filter (\(n,_) -> head n /= '_')) $ match' a b
+match a b = liftM (map (second Term)) $ match' a b
 
 match' :: Term -> Term -> ThrowsError [(String,Term)]
-match' (TVar name _) term = return [(name,term)]
+match' (TVar name _) term = case name of
+                                '_':_ -> return []
+                                _     -> return [(name,term)]
 match' (TPair (m1, m2)) (TPair (t1,t2)) = liftM2 (++) (match' m1 t1)  (match' m2 t2)
 match' (TList (m:ms)) (TList (t:ts)) = do
                 bind <- match' m t
@@ -39,8 +41,8 @@ dataToList (Resp r) = TList [TNum code, TStr reason, TList headers, TStr bdy]
         headers = map (TStr . show) $ rspHeaders r
         bdy = rspBody r
 
-testMatch :: String -> String -> ThrowsError [(String,Value)]
-testMatch s1 s2 = do
+matchTest :: String -> String -> ThrowsError [(String,Value)]
+matchTest s1 s2 = do
     t1 <- readTerm s1
     t2 <- readTerm s2
     match t1 t2
