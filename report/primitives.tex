@@ -1,3 +1,9 @@
 \section{Primitives and Term Manipulation}
 
+We have implemented a large set of primitives with which you can manipulate Terms, and some specific to manipulating HTTP data. In this section we go over the primitive functions available to the user, and explain their purpose and implementation.
+ 
+\subsection{Definitions and Explanations}
+
 \input{prims}
+
+Hopefully it is clear that we have built this set of primitives in such a way that allows for the user to compose them easily and build their own functions. An example of this can be found in the $pilude$: $getLocation(httpRequest)$ -- defined as $getHeader("location",httpRequest)$
