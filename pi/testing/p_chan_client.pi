@@ -1,0 +1,6 @@
+out(stdout,"Enter host:"); in(stdin,host);
+out(stdout,"Enter port:"); in(stdin,port);
+let ch = chan(host,port) in
+    let sch = {} in
+        out(ch,sch);in(sch,msg);out(stdout,msg)
+

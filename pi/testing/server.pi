@@ -1,3 +1,5 @@
-out(stdout,"Enter port:"); in(stdin,port);
-let ch = {port} in 
-    in(ch,sch);in(stdin,msg);out(sch,msg)
+&load("pilude.pi");
+out(stdout,"Enter Port");
+in(stdin,port);
+    let ch = {port} in
+        &in_and_out(ch)

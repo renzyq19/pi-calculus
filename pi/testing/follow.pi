@@ -1,5 +1,5 @@
 let follow(ch,r) = (out(ch,r);in(ch,resp:HttpResponse);
-    let list(c,_,h,_) = resp in
+    let list(c,_,h,b) = resp in
         if c = 302 
             then let req = httpReq(getHeader("location",resp),headers(),httpGet()) in &follow(ch,req) 
-            else &print(h)) 
+            else &print(b)) 
