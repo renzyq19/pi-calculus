@@ -17,9 +17,10 @@ import qualified Data.Map as Map
 
 import Channel
 import Parser
+import Paths_pi_calculus
+import PatternMatching
 import Primitives
 import TypDefs
-import PatternMatching
 
 nullEnv :: IO Env
 nullEnv = newIORef Map.empty
@@ -79,11 +80,12 @@ nativeChannels = [ ("stdin"  , stdChan stdin)
 
 main :: IO ()
 main = do
-        name <- getProgName
-        args <- getArgs
+        name   <- getProgName
+        args   <- getArgs
+        pilude <- getDataFileName "pilude.pi"
         case args of
             []  -> runRepl coreBindings
-            [x] -> readFile x >>= runProcess coreBindings 
+            [x] -> liftM (("&load("++pilude++");")++) (readFile x) >>= runProcess coreBindings 
             _   -> do
                     putStrLn           "Use:"
                     putStrLn $ name ++ " -- Enter the REPL"
@@ -275,6 +277,9 @@ eval env (Let t1 (Term t2) Nothing) = do
                         bindings <- liftThrows $ match t1 term
                         mapM_ (uncurry (defineVar env)) bindings
                     _         -> throwE $ Default "Can only pattern match against Terms"
+eval env (Atom (TFun "load" [TStr "pilude.pi"])) = do
+            pilude <- liftIO $ getDataFileName "pilude.pi"
+            eval env (Atom (TFun "load" [TStr pilude]))
 eval env (Atom (TFun "load" [TStr file])) = do
             procs <- load file  
             eval env $ foldl Seq Null procs

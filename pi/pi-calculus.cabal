@@ -2,7 +2,7 @@
 -- documentation, see http://haskell.org/cabal/users-guide/
 
 name:                pi-calculus
-version:             0.0.3
+version:             0.0.4
 synopsis:            Applied pi-calculus compiler
 description:         Phi - A compiler for the applied pi-calculus. Very rough around the edges.
 license:             GPL-3
@@ -14,8 +14,9 @@ homepage:            https://github.com/renzyq19/pi-calculus
 category:            Web
 build-type:          Simple
 cabal-version:       >=1.8
+data-files:          testing/*.pi, pilude.pi
 
 executable phi
   main-is:           PiCalculus.hs
-  other-modules:     Channel, Parser, PatternMatching, Primitives, TypDefs
+  other-modules:     Channel, Parser, PatternMatching, Primitives, TypDefs, Paths_pi_calculus
   build-depends:       base >=4.5 && <=4.8, mtl ==2.2.*, parsec ==3.1.*, containers ==0.5.*, transformers ==0.4.*, network ==2.5.*, HTTP >=2.15, bytestring >= 0.10, io-streams ==1.1.*
