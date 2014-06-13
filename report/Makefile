@@ -9,8 +9,9 @@ spellcheck:
 report.pdf: report.aux 
 	$(TEX) report.tex
 
-report.aux: introduction.tex csAndPs.tex primitives.tex patterns.tex tsAndParser.tex background.tex phi.tex plan.tex evaluation.tex extension.tex bibliography.bib pi-calc.tex prims.tex
+report.aux:  *.tex
 
+background.tex: sockets.lhs
 pi-calc.tex: pi-calc.lhs
 prims.tex: prims.lhs
 

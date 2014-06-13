@@ -2,37 +2,31 @@
 
 \begin{code}
 import Control.Monad (forever,unless)
-import Control.Concurrent (forkIO)
+import Control.Concurrent (forkFinally, forkIO)
 import Control.Monad.IO.Class (liftIO)
-import qualified Data.Text as T
-import qualified Data.Text.IO as T
-import qualified Network.WebSockets as WS
+import System.IO (hGetLine, hPutStrLn)
+import qualified Network as N
 
 
 -- SERVER Process Code
 server :: IO ()
 server = do
-    WS.runServer "0.0.0.0" 9000 $ pong
-
-pong :: WS.ServerApp
-pong pending = do
-    conn <- WS.acceptRequest pending
-    forever $ do 
-        msg <- WS.receiveData conn
-        WS.sendTextData conn (msg :: T.Text)
+    sock <- N.listenOn $ N.PortNumber 9000 
+    (handle,_,_) <- N.accept sock
+    _ <- forkFinally (forever $ do 
+        msg <- hGetLine handle
+        hPutStrLn handle msg) (\_ -> N.sClose sock)
+    return ()
 
 -- CLIENT Process Code
 client :: IO ()
-client = WS.runClient "0.0.0.0" 9000 "/" ping
-
-ping :: WS.ClientApp ()
-ping conn = do
-    _ <- forkIO $ forever $ do
-        msg <- WS.receiveData conn
-        liftIO $ T.putStrLn msg
+client = do 
+    handle <- N.connectTo "localhost" $ N.PortNumber 9000
     let loop = do
-            line <- T.getLine
-            unless (T.null line) $WS.sendTextData conn line
+            line <- getLine 
+            hPutStrLn handle line
+            msg <- hGetLine handle
+            putStrLn msg
             loop
     loop
 
@@ -41,6 +35,4 @@ main = do
     _ <- forkIO $ server
     client
     
-
-
 \end{code}

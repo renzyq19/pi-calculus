@@ -95,14 +95,14 @@ As the Pict language did when creating an implementation of pure $\pi$-calculus 
 
 \begin{table}[hc!]
     \begin{tabular}{r c l}
-        $P|Q$& \verb!P | Q!& parallel composition\\
-        $P.Q$& \verb!P ; Q!& sequential composition\\
-        $!P$ & \verb?!P?& replication \\
-        $vn$& \verb!new x!& new \\
-        $if M=N then P else Q $&\verb!if p(M) then P else Q!& conditional \\
-        $u(x)$&\verb!in(u,x)!& input \\
-        $\bar{u}\langle N \rangle .P$&\verb!out(u,N)!& output \\
-        $\left[ \frac{M}{x} \right]$&\verb!let X = M in P!&  active substitution (i.e. pattern matching) \\
+        $P|Q$& \verb!P | Q!\\
+        $P.Q$& \verb!P ; Q!\\
+        $!P$ & \verb?!P?\\
+        $vn$& \verb!new x!\\
+        $if M=N then P else Q $&\verb!if p(M) then P else Q! \\
+        $u(x)$&\verb!in(u,x)! \\
+        $\bar{u}\langle N \rangle .P$&\verb!out(u,N)! \\
+        $\left[ \frac{M}{x} \right]$&\verb!let X = M in P!\\
     \end{tabular}
 \end{table} 
 
@@ -110,8 +110,9 @@ This will be the syntax we refer to from now on, and which we will be attempting
 
 \subsubsection{Starting Restrictions}
 
-The first build of our compiler will only be able to handle a few basic types and functions. We will also only be concerning ourselves with HTTP traffic, and to begin with our channels will be WebSockets \cite{wiki:ws}. The reasoning here is that attempting a completely generic channel would involve implementing a huge range of different server and client-like processes, which is not feasible. By starting with WebSockets, we can familiarise ourselves with some of the concepts of
-channels and cross-process communication, and later on we can expand to more generic sockets once we are sure our language implementation is sound.
+The first build of our compiler will only be able to handle a few basic types and functions. We will also only be concerning ourselves with HTTP traffic, and to begin with our channels will be for the most part duplex handles built from sockets \cite{wiki:sockets} handled by the Haskell Network library \cite{hack:network}. The reasoning here is that getting to grips with the entirety of the low level C socket API (which is exposed by the Network.Socket module) would not be a productive use of time with respect to our main intended purpose (i.e. to handle HTTP traffic).
+By limiting our initial approach, we can familiarise ourselves with some of the concepts of
+sockets and later on we can expand to more generic sockets if necessary and once our language implementation is sound.
 
 \subsection{Haskell}
 
@@ -142,13 +143,13 @@ It is also good to note that malformed structures will fail:
         Probable cause: `Out' is applied to too few arguments
         In the second argument of `Seq', namely `(Out "a")'
         In the expression: (In "a" "x") `Seq` (Out "a")
-                                        
 \end{code}
 
 \subsubsection{Parsec}
 
 Parsec is a monadic parser combinator library for Haskell which is fast, robust, simple and well-documented \cite{lm01}. We use parsec by building a series of low-level parsers and combining them into a single high level one.
 For example, if we start with a low-level parser to match brackets, from that we can build a higher level parser which can then return the contents of those brackets as a list of strings:
+
 \begin{code}
 import Text.ParserCombinators.Parsec
 
@@ -234,19 +235,13 @@ And a demonstration of this in action (removing our custom show instance, as oth
     expecting "("
     ghci>parseTest inOut "out(a,b,c)"
     *** Exception: malformed input out(chan,message) expected
-    ghci>parseTest inOut "out (a,b)"
-    parse error at (line 1, column 4):
-    unexpected " "
-    expecting "("
 \end{code}
 
-In the last case it is interesting to note that whitespace is not handled very well. This can be solved by first tokenising the input. The ParsecToken module can be used to generate a tokeniser.
+\subsubsection{Sockets and the Network module}
 
-\subsubsection{WebSockets}
+Once we have parsed our input and built our syntax tree, we must then semantically analyse the input and generate the processes required. As mentioned before we will be using the Haskell Network module  for our initial implementation.
 
-Once we have parsed our input and built our syntax tree, we must then semantically analyse the input and generate the processes required. As mentioned before we will be using WebSockets for our initial implementation.
-
-Here we can demonstrate some basic WebSockets functionality. We can use the Haskell WebSockets module in the following way:
+Here we can demonstrate some basic functionality using Sockets. We can use the Haskell Network module in the following way:
 
 \input{sockets.lhs}
 
@@ -262,5 +257,4 @@ This small program creates two processes. The client continuously reads from std
 \end{verbatim}
 
 Which is something akin to our basic program from our introduction.
-
 

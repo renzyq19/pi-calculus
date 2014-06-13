@@ -110,8 +110,9 @@ This will be the syntax we refer to from now on, and which we will be attempting
 
 \subsubsection{Starting Restrictions}
 
-The first build of our compiler will only be able to handle a few basic types and functions. We will also only be concerning ourselves with HTTP traffic, and to begin with our channels will be WebSockets \cite{wiki:ws}. The reasoning here is that attempting a completely generic channel would involve implementing a huge range of different server and client-like processes, which is not feasible. By starting with WebSockets, we can familiarise ourselves with some of the concepts of
-channels and cross-process communication, and later on we can expand to more generic sockets once we are sure our language implementation is sound.
+The first build of our compiler will only be able to handle a few basic types and functions. We will also only be concerning ourselves with HTTP traffic, and to begin with our channels will be for the most part duplex handles built from sockets \cite{wiki:sockets} handled by the Haskell Network library \cite{hack:network}. The reasoning here is that getting to grips with the entirety of the low level C socket API (which is exposed by the Network.Socket module) would not be a productive use of time with respect to our main intended purpose (i.e. to handle HTTP traffic).
+By limiting our initial approach, we can familiarise ourselves with some of the concepts of
+sockets and later on we can expand to more generic sockets if necessary and once our language implementation is sound.
 
 \subsection{Haskell}
 
@@ -236,11 +237,11 @@ And a demonstration of this in action (removing our custom show instance, as oth
     *** Exception: malformed input out(chan,message) expected
 \end{code}
 
-\subsubsection{WebSockets}
+\subsubsection{Sockets and the Network module}
 
-Once we have parsed our input and built our syntax tree, we must then semantically analyse the input and generate the processes required. As mentioned before we will be using WebSockets for our initial implementation.
+Once we have parsed our input and built our syntax tree, we must then semantically analyse the input and generate the processes required. As mentioned before we will be using the Haskell Network module  for our initial implementation.
 
-Here we can demonstrate some basic WebSockets functionality. We can use the Haskell WebSockets module in the following way:
+Here we can demonstrate some basic functionality using Sockets. We can use the Haskell Network module in the following way:
 
 \input{sockets.lhs}
 
@@ -256,5 +257,4 @@ This small program creates two processes. The client continuously reads from std
 \end{verbatim}
 
 Which is something akin to our basic program from our introduction.
-
 
