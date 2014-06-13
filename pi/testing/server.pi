@@ -1,3 +1,3 @@
-out(stdout,"Enter port"); in(stdin,port);
+out(stdout,"Enter port:"); in(stdin,port);
 let ch = {port} in 
     in(ch,sch);out(stdout,sch);in(stdin,msg);out(sch,msg)
