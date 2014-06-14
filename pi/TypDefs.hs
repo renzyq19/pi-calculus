@@ -17,6 +17,7 @@ module TypDefs (
 
 import Control.Monad.Trans.Except(ExceptT(..))
 import Data.Char (toLower)
+import Data.ByteString (ByteString)
 import Data.IORef (IORef)
 import Data.List (intercalate)
 import Data.Map (Map)
@@ -43,6 +44,7 @@ data Term = TVar Name (Maybe Type)
           | TBool Bool
           | TPair (Term, Term)
           | TList [Term]
+          | TBS ByteString
           | TData HttpData
           | TFun Name [Term]
             deriving (Eq)
@@ -166,6 +168,7 @@ showTerm (TBool b ) = map toLower $ show b
 showTerm (TList ls) = "list(" ++ intercalate "," (map show ls) ++ ")"
 showTerm (TPair (a,b)) = "pair("++ show a ++ ","++ show b ++ ")"
 showTerm (TData d) = show d
+showTerm (TBS bs)  = show bs
 showTerm (TFun n ts) = n ++ "(" ++ intercalate "," (map show ts) ++ ")"
 
 showCond :: Condition -> String

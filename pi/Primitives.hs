@@ -2,6 +2,8 @@ module Primitives (primitives) where
 
 import Control.Applicative ((<$>))
 import Control.Monad.Error (throwError)
+import qualified Crypto.Hash as Crypto
+import Data.Byteable (toBytes)
 import Network.HTTP.Base (Request(..), Response(..), RequestMethod(..), mkRequest)
 import Network.HTTP.Cookie (Cookie, cookiesToHeader)
 import Network.HTTP.Headers (HasHeaders(..), Header, HeaderName(..), hdrName, hdrValue, findHeader, parseHeader, replaceHeader, setHeaders)
@@ -12,7 +14,7 @@ import TypDefs
 primitives :: [(String      , TermFun)]
 primitives = [ ("fst"       , first)
              , ("snd"       , secnd)
-             , ("hash"      , unaryId "hash")
+             , ("hash"      , hash)
              , ("pk"        , unaryId "pk")
              , ("httpReq"   , httpReq)
              , ("httpResp"  , httpResp)
@@ -23,7 +25,7 @@ primitives = [ ("fst"       , first)
              , ("aenc"      , binaryId "aenc")
              , ("sign"      , binaryId "sign")
              , ("checksign" , checksign)
-             , ("mac"       , binaryId "mac")
+             , ("mac"       , mac)
              , ("headers"   , listId)
              , ("header"    , header)
              , ("cookies"   , listId)
@@ -42,6 +44,8 @@ primitives = [ ("fst"       , first)
              , ("head"      , head')
              , ("tail"      , tail')
              ]
+
+
 
 constId :: String -> TermFun
 constId name [] = return $ TFun name []
@@ -85,6 +89,7 @@ adec e = throwError $ TypeMismatch "(var,aenc(pk(var),var))" $ map Term e
 checksign :: TermFun
 checksign [TFun "pk" [k1], TFun "sign" [k2,_] ] = return $ TBool (k1 == k2)
 checksign e = throwError $ TypeMismatch "(pk(var),sign(var,var))" $ map Term e
+
 
 httpReq :: TermFun
 httpReq [TStr url, TList hs , reqMethod] = do
@@ -203,3 +208,11 @@ tail' :: TermFun
 tail' [TList []] = throwError $ Default "tail of empty list" 
 tail' [TList x] = return $ TList $ tail x
 tail' e = throwError $ TypeMismatch "list" $ map Term e
+
+hash :: TermFun
+hash [TBS msg] = return $ TBS $ toBytes (Crypto.hash msg :: Crypto.Digest Crypto.MD5)
+hash e = throwError $ TypeMismatch "bytestring" $ map Term e
+        
+mac :: TermFun
+mac [TBS key,TBS msg] = return $ TBS $ toBytes $ Crypto.hmacGetDigest $ Crypto.hmacAlg Crypto.MD5 key msg
+mac e = throwError $ TypeMismatch "(bytestring,bytestring)" $ map Term e

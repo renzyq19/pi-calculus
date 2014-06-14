@@ -102,10 +102,11 @@ evalCond env (t1 `Equals` t2) = liftM2 (==) (evalTerm env t1) (evalTerm env t2)
 
 evalTerm :: Env -> Term -> IOThrowsError Value
 evalTerm env (TVar name _) = getVar env name
-evalTerm _   (TNum num) = return $ Term $ TNum num
-evalTerm _   (TStr str) = return $ Term $ TStr str
-evalTerm _   (TBool b ) = return $ Term $ TBool b
-evalTerm _   (TData d ) = return $ Term $ TData d
+evalTerm _   t@(TNum  _ ) = return $ Term t
+evalTerm _   t@(TStr  _ ) = return $ Term t
+evalTerm _   t@(TBool _ ) = return $ Term t
+evalTerm _   t@(TBS   _ ) = return $ Term t
+evalTerm _   t@(TData _ ) = return $ Term t
 evalTerm env   (TList ls) = do
     vs <- mapM (evalTerm env) ls
     ts <- extractTerms vs
