@@ -1,10 +1,10 @@
-module PatternMatching (match, matchTest) where            
+module PatternMatching (match) where            
             
 import Control.Arrow (second) 
 import Control.Monad (liftM,liftM2)
 import Control.Monad.Error (throwError)
 import TypDefs
-import Parser (readTerm)
+--import Parser (readTerm)
 import Network.HTTP.Base 
 
 match :: Term -> Term -> ThrowsError [(String,Value)]
@@ -41,9 +41,11 @@ dataToList (Resp r) = TList [TNum code, TStr reason, TList headers, TStr bdy]
         headers = map (TStr . show) $ rspHeaders r
         bdy = rspBody r
 
+{-
 matchTest :: String -> String -> ThrowsError [(String,Value)]
 matchTest s1 s2 = do
     t1 <- readTerm s1
     t2 <- readTerm s2
     match t1 t2
+    -}
     

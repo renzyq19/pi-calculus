@@ -1,6 +1,10 @@
 \section{Primitives and Term Manipulation}
+\label{sec:primitives}
 
-We have implemented a large set of primitives with which you can manipulate Terms, and some specific to manipulating HTTP data. In this section we go over the primitive functions available to the user, and explain their purpose and implementation. All of these primitives operate in the $ThrowsError a$ Monad (a type synonym for $Either PiError a$), meaning they can fail gracefully on malformed or incorrect inputs.
+The Primitives module exports an associative list $primitives :: [(Name,TermFun)]$ which maps the names of primitive functions to $TermFun$ s. As explained in section \ref{subsec:types}, $TermFun$ is a type synonym for $[Term] -> ThrowsError Term$ , and $ThrowsError a$ is a type synonym for $Either PiError a$ . This means each of these functions will be passed a list of terms, and then has the possibility of returning a result (a $Term$ ) or an error ( a $PiError$ )
+As such, any malformed or incorrect inputs will fail gracefully and be handled appropriately.
+
+We have implemented a large set of primitives with which you can manipulate Terms, and some specific to manipulating HTTP data. In this section we go over the primitive functions available to the user, and explain their purpose and implementation.
  
 \subsection{Definitions and Explanations}
 

@@ -12,7 +12,7 @@ import Network.URI (parseURI)
 
 import TypDefs
 
-primitives :: [(String        , TermFun)]
+primitives :: [(Name          , TermFun)]
 primitives = [ ("fst"         , first)
              , ("snd"         , secnd)
              , ("hash"        , hash)

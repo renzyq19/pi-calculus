@@ -52,21 +52,12 @@ data Term = TVar Name (Maybe Type)
 data HttpData = Resp (Response String)
               | Req  (Request String)
 
-instance Eq HttpData where (==) = eqHttpData
-instance Show HttpData where show = showHttpData
-
 instance HasHeaders HttpData where
     getHeaders (Resp r) = getHeaders r
     getHeaders (Req r)  = getHeaders r
     setHeaders (Resp r) = Resp . setHeaders r
     setHeaders (Req r)  = Req . setHeaders r
 
-showHttpData :: HttpData -> String
-showHttpData (Resp r) = show r
-showHttpData (Req r)  = show r 
-
-eqHttpData :: HttpData -> HttpData -> Bool
-eqHttpData _ _ = False
 
 type TermFun = [Term] -> ThrowsError Term
 
@@ -95,25 +86,7 @@ data PiError = NumArgs Name Integer [Value]
 
 data Type = HttpRequest
           | HttpResponse
-          | Header
-          | List Type
           deriving (Eq, Read, Show)
-
-instance Show PiError where show = showError
-
-showError :: PiError -> String
-showError (UnboundVar message var)      = message ++ ": " ++ var
-showError (NotFunction message fun)     = message ++ ": " ++ fun
-showError (NotChannel chan)             = "Not a channel: " ++ chan 
-showError (NotProcess proc)             = "Not a Process: " ++ proc
-showError (NotTerm name var)            = "Expecting " ++ name ++ " to be a Term, found: " ++ show var
-showError (NumArgs name expected found) = "Expected " ++ show name ++ show expected ++ " args; found values "
-                                          ++ unwordsList found
-showError (TypeMismatch expected found) = "Invalid type: expected " ++ expected ++ ", found "
-                                          ++ show found
-showError (Parser parseErr)             = "Parse error at " ++ show parseErr
-showError (PatternMatch t1 t2)          = "Pattern match failure: cannot match " ++ show t1 ++ " and \n" ++ show t2
-showError (Default msg)                 = msg
 
 type Env = IORef (Map String Value)
 
@@ -127,22 +100,12 @@ data BuildType = Init
                | Connect
                  deriving (Eq, Show, Read)
 
-showValue :: Value -> String
-showValue (Proc p)  = show p
-showValue (Term t)  = show t
-showValue (Chan c)  = show $ convert c
-    where 
-        convert ch = TFun "<chan>" (map TStr ex) 
-            where ex = extra ch
-showValue (PrimitiveFunc _)  = "<primitive>" 
-showValue (Func {})          = "<user function>"  
-
-eqvVal :: Value -> Value -> Bool
-eqvVal (Proc p1)  (Proc p2) = p1 == p2
-eqvVal (Term t1)  (Term t2) = t1 == t2
-eqvVal _ _ = False
-
-instance Eq Value where (==) = eqvVal
+instance Show PiProcess where show = showPi
+instance Show Term      where show = showTerm
+instance Show Value     where show = showValue
+instance Show Condition where show = showCond
+instance Show PiError where show = showError
+instance Show HttpData where show = showHttpData
 
 showPi :: PiProcess -> String
 showPi Null = "0"
@@ -171,13 +134,48 @@ showTerm (TData d) = show d
 showTerm (TBS bs)  = show bs
 showTerm (TFun n ts) = n ++ "(" ++ intercalate "," (map show ts) ++ ")"
 
+showValue :: Value -> String
+showValue (Proc p)  = show p
+showValue (Term t)  = show t
+showValue (Chan c)  = show $ convert c
+    where 
+        convert ch = TFun "<chan>" (map TStr ex) 
+            where ex = extra ch
+showValue (PrimitiveFunc _)  = "<primitive>" 
+showValue (Func {})          = "<user function>"  
+
 showCond :: Condition -> String
 showCond (t1 `Equals` t2) = show t1 ++ " == " ++ show t2
 
-instance Show PiProcess where show = showPi
-instance Show Term      where show = showTerm
-instance Show Condition where show = showCond
-instance Show Value     where show = showValue
+showError :: PiError -> String
+showError (UnboundVar message var)      = message ++ ": " ++ var
+showError (NotFunction message fun)     = message ++ ": " ++ fun
+showError (NotChannel chan)             = "Not a channel: " ++ chan 
+showError (NotProcess proc)             = "Not a Process: " ++ proc
+showError (NotTerm name var)            = "Expecting " ++ name ++ " to be a Term, found: " ++ show var
+showError (NumArgs name expected found) = "Expected " ++ show name ++ show expected ++ " args; found values "
+                                          ++ unwordsList found
+showError (TypeMismatch expected found) = "Invalid type: expected " ++ expected ++ ", found "
+                                          ++ show found
+showError (Parser parseErr)             = "Parse error at " ++ show parseErr
+showError (PatternMatch t1 t2)          = "Pattern match failure: cannot match " ++ show t1 ++ " and \n" ++ show t2
+showError (Default msg)                 = msg
+
+showHttpData :: HttpData -> String
+showHttpData (Resp r) = show r
+showHttpData (Req r)  = show r 
+
+instance Eq Value where (==) = eqvVal
+instance Eq HttpData where (==) = eqHttpData
+
+eqHttpData :: HttpData -> HttpData -> Bool
+eqHttpData _ _ = False
+
+eqvVal :: Value -> Value -> Bool
+eqvVal (Proc p1)  (Proc p2) = p1 == p2
+eqvVal (Term t1)  (Term t2) = t1 == t2
+eqvVal _ _ = False
+
 
 unwordsList :: [Value] -> String
 unwordsList = unwords . map show
