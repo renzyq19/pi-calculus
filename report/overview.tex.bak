@@ -1,0 +1,38 @@
+\section{Package Overview}
+
+Our implementation is broken into 6 modules, we give a brief overview of each here
+
+\subsection{TypDefs}
+
+This module describes all of the data types, type synonyms and instances for types that are used in our implementation. We will discuss these in depth in section \ref{subsec:types}
+
+\subsection{Parser}
+
+This module contains all of the parsing logic for our program. It exports the functions $readTerm$ , $readProcess$ , and $readProcesses$, which parse a Term, a PiProcess, and several PiProcesses respectively. See section \ref{subsec:parser}
+
+\subsection{Channel}
+
+This module contains the logic for channels. The most important functions this module exports are
+
+\begin{enumerate}
+    \item $newChan$ - creates either the server end or client end of a socket channel (depending on how the function is called)
+    \item $stdChan$ - creates a channel for a standard input/output (i.e. stdout,stderr,stdin)
+    \item $newDummyChan$ - creates a channel which can only communicate within a process
+\end{enumerate}
+
+See section \ref{sec:channels}
+
+\subsection{Primitives}
+
+This module describes the primitives for our implementation of the language, and exports an associative list of Strings and functions for manipulating Terms : $primitives$
+This associative list is imported by the PiCalculus module where the strings are bound to their Term manipulating functions in the environment. We discuss the implementation and function of these primitives in section \ref{sec:primitives}
+
+\subsection{PatternMatching}
+
+This module contains the logic for our pattern matching system, and exports a single function $match$
+We discuss how we achieve our matching in section \ref{sec:patterns}
+
+\subsection{PiCalculus}
+
+This is the main module of the program. This is where the component parts are brought together, and where processes are evaluated and executed. This module is discussed in section \ref{sec:main}
+
