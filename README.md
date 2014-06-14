@@ -12,3 +12,26 @@ The goal of the project is to provide an implementation for the language so that
 Author: Will de Renzy-Martin
 
 Supervisor: Sergio Maffeis
+
+*Installation*
+
+hackage:
+
+    cabal update
+    cabal install pi-calculus
+
+From source:
+
+    git clone git@github:renzyq19/pi-calculus
+    cd pi-calculus/pi
+    cabal install
+
+*Use*
+
+    phi file.pi -- execute file.pi
+    phi         -- enter REPL
+
+
+
+
+    
