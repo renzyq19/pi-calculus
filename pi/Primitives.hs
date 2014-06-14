@@ -44,6 +44,7 @@ primitives = [ ("fst"         , first)
              , ("cons"        , cons)
              , ("head"        , head')
              , ("tail"        , tail')
+             , ("append"      , append)
              ]
 
 
@@ -219,3 +220,7 @@ mac :: TermFun
 mac [TBS key,TBS msg]  = return $ TBS $ toBytes $ Crypto.hmacGetDigest $ Crypto.hmacAlg Crypto.MD5 key msg
 mac [TBS key,TStr msg] = let mBS = C8.pack msg in return $ TBS $ toBytes $ Crypto.hmacGetDigest $ Crypto.hmacAlg Crypto.MD5 key mBS
 mac e = throwError $ TypeMismatch "(bytestring,bytestring)" $ map Term e
+
+append :: TermFun
+append [TList x, TList y] = return $ TList $ x ++ y 
+append e = throwError $ TypeMismatch "(list,list)" $ map Term e

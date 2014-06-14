@@ -32,3 +32,56 @@ or we can interpret a single file containing a process as follows:
 \end{code}
 
 \subsection{Language Syntax}
+
+The simplest processes in the language are
+\begin{code}
+    in(chan,msg)
+\end{code}
+which receives a message on the channel chan and binds it to the variable msg for subsequent processes
+
+and 
+\begin{code}
+    out(chan,msg)
+\end{code}
+which sends the value of variable msg across channel chan.
+
+The most basic channels are the wrappers for stdin, stdout and stderr, all of which have the same names. So, the ubiquitous "Hello World!" program is written in pi-calculus as:
+\begin{code}
+    out(stdout,"Hello World!")
+\end{code}
+
+These can be combined sequentially using \verb!;!, so a more complex example would be:
+\begin{code}
+    out(stdout,"What is your name?");
+    in(stdin,name);
+    out(stdout,append("Hello ",name))
+\end{code}
+
+We can define our own variables and functions using:
+\begin{code}
+    let variable = value in process
+\end{code}
+which binds variable to value locally in process
+
+\begin{code}
+    let function(..) = body in process 
+\end{code}
+which binds the function(..) to be body locally in process
+
+So to rewrite our second example: \footnote{N.B. Any whitespace over a single space around "in" is ignored, so the indentation above is optional, but nicer to read}
+\begin{code}
+    out(stdout,"What is your name?");
+    in(stdin,name);
+    let prependHello(a) = append("Hello ",a) in
+        let helloName = prependHello(name) in
+            out(stdout,helloName)
+\end{code}
+
+
+or, if we are in the REPL (or a module file, which we will cover momentarily) we can define variables and functions globally by omitting the "in process"
+i.e.
+\begin{code}
+    let triple(a,b,c) = pair(a,pair(b,c))
+\end{code}
+
+
