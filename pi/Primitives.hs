@@ -4,6 +4,7 @@ import Control.Applicative ((<$>))
 import Control.Monad.Error (throwError)
 import qualified Crypto.Hash as Crypto
 import Data.Byteable (toBytes)
+import qualified Data.ByteString.Char8 as C8
 import Network.HTTP.Base (Request(..), Response(..), RequestMethod(..), mkRequest)
 import Network.HTTP.Cookie (Cookie, cookiesToHeader)
 import Network.HTTP.Headers (HasHeaders(..), Header, HeaderName(..), hdrName, hdrValue, findHeader, parseHeader, replaceHeader, setHeaders)
@@ -11,38 +12,38 @@ import Network.URI (parseURI)
 
 import TypDefs
 
-primitives :: [(String      , TermFun)]
-primitives = [ ("fst"       , first)
-             , ("snd"       , secnd)
-             , ("hash"      , hash)
-             , ("pk"        , unaryId "pk")
-             , ("httpReq"   , httpReq)
-             , ("httpResp"  , httpResp)
-             , ("getmsg"    , getmsg)
-             , ("sdec"      , sdec)
-             , ("senc"      , binaryId "senc")
-             , ("adec"      , adec)
-             , ("aenc"      , binaryId "aenc")
-             , ("sign"      , binaryId "sign")
-             , ("checksign" , checksign)
-             , ("mac"       , mac)
-             , ("headers"   , listId)
-             , ("header"    , header)
-             , ("cookies"   , listId)
-             , ("httpGet"   , constId "httpGet")
-             , ("httpHead"  , constId "httpHead")
-             , ("httpPost"  , constId "httpPost")
-             , ("getHeaders", getHeadersFromData)
-             , ("setHeader" , setHeader)
-             , ("getHeader" , getHeader)
-             , ("getCookie" , getCookie)
-             , ("setCookie" , setCookie)
-             , ("uri"       , makeUri)
-             , ("rspCode"   , responseCode)
-             , ("add"       , add)
-             , ("cons"      , cons)
-             , ("head"      , head')
-             , ("tail"      , tail')
+primitives :: [(String        , TermFun)]
+primitives = [ ("fst"         , first)
+             , ("snd"         , secnd)
+             , ("hash"        , hash)
+             , ("pk"          , unaryId "pk")
+             , ("httpReq"     , httpReq)
+             , ("httpResp"    , httpResp)
+             , ("getmsg"      , getmsg)
+             , ("sdec"        , sdec)
+             , ("senc"        , binaryId "senc")
+             , ("adec"        , adec)
+             , ("aenc"        , binaryId "aenc")
+             , ("sign"        , binaryId "sign")
+             , ("checksign"   , checksign)
+             , ("mac"         , mac)
+             , ("headers"     , listId)
+             , ("header"      , header)
+             , ("cookies"     , listId)
+             , ("httpGet"     , constId "httpGet")
+             , ("httpHead"    , constId "httpHead")
+             , ("httpPost"    , constId "httpPost")
+             , ("getHeaders"  , getHeadersFromData)
+             , ("insertHeader", insertHeader)
+             , ("getHeader"   , getHeader)
+             , ("getCookie"   , getCookie)
+             , ("setCookie"   , setCookie)
+             , ("uri"         , makeUri)
+             , ("rspCode"     , responseCode)
+             , ("add"         , add)
+             , ("cons"        , cons)
+             , ("head"        , head')
+             , ("tail"        , tail')
              ]
 
 
@@ -153,14 +154,14 @@ getHeader [TStr headr, TData d] = do
             _       -> throwError $ Default $ headr ++ " not in " ++ show d
 getHeader e = throwError $ TypeMismatch "httpData" $ map Term e
 
-setHeader :: TermFun
-setHeader [h@(TStr _), TData d] = do 
+insertHeader :: TermFun
+insertHeader [h@(TStr _), TData d] = do 
                       headr <- makeHeader h
                       let name = hdrName headr
                       let val  = hdrValue headr
                       return $ TData $ replaceHeader name val d 
-setHeader [h@(TStr _), TList hs] = return $ TList $ h : hs  
-setHeader e = throwError $ TypeMismatch "(header,httpData|headers)" $ map Term e
+insertHeader [h@(TStr _), TList hs] = return $ TList $ h : hs  
+insertHeader e = throwError $ TypeMismatch "(header,httpData|headers)" $ map Term e
 
 getCookie :: TermFun
 getCookie [TData d] = 
@@ -210,9 +211,11 @@ tail' [TList x] = return $ TList $ tail x
 tail' e = throwError $ TypeMismatch "list" $ map Term e
 
 hash :: TermFun
-hash [TBS msg] = return $ TBS $ toBytes (Crypto.hash msg :: Crypto.Digest Crypto.MD5)
+hash [TBS msg]  = return $ TBS $ toBytes (Crypto.hash msg :: Crypto.Digest Crypto.MD5)
+hash [TStr msg] = let mBS = C8.pack msg in return $ TBS $ toBytes (Crypto.hash mBS :: Crypto.Digest Crypto.MD5)
 hash e = throwError $ TypeMismatch "bytestring" $ map Term e
         
 mac :: TermFun
-mac [TBS key,TBS msg] = return $ TBS $ toBytes $ Crypto.hmacGetDigest $ Crypto.hmacAlg Crypto.MD5 key msg
+mac [TBS key,TBS msg]  = return $ TBS $ toBytes $ Crypto.hmacGetDigest $ Crypto.hmacAlg Crypto.MD5 key msg
+mac [TBS key,TStr msg] = let mBS = C8.pack msg in return $ TBS $ toBytes $ Crypto.hmacGetDigest $ Crypto.hmacAlg Crypto.MD5 key mBS
 mac e = throwError $ TypeMismatch "(bytestring,bytestring)" $ map Term e

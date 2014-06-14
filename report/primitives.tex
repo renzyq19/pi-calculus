@@ -1,6 +1,6 @@
 \section{Primitives and Term Manipulation}
 
-We have implemented a large set of primitives with which you can manipulate Terms, and some specific to manipulating HTTP data. In this section we go over the primitive functions available to the user, and explain their purpose and implementation.
+We have implemented a large set of primitives with which you can manipulate Terms, and some specific to manipulating HTTP data. In this section we go over the primitive functions available to the user, and explain their purpose and implementation. All of these primitives operate in the $ThrowsError a$ Monad (a type synonym for $Either PiError a$), meaning they can fail gracefully on malformed or incorrect inputs.
  
 \subsection{Definitions and Explanations}
 
