@@ -3,21 +3,32 @@
 \subsection{Installation}
 
 The source is available on Hackage, and can be installed using cabal:
+
 \begin{code}
-    $ cabal update
-    $ cabal install pi-calculus
+    cabal update
+    cabal install pi-calculus
 \end{code}
 
 Alternatively you can clone the source and build using cabal:
 
 \begin{code}
-    $ git clone git@github:renzyq19/pi-calculus
-    $ cd pi-calculus/pi
-    $ cabal install
+    git clone git@github:renzyq19/pi-calculus
+    cd pi-calculus/pi
+    cabal install
 \end{code}
 
 \subsection{Running}
 
-To run the program
+To run the interpreter, we can either enter the Read Eval Print Loop (REPL) by entering typing phi at the command line:
+\begin{code}
+    $ phi
+    phi>
+\end{code}
+
+or we can interpret a single file containing a process as follows:
+
+\begin{code}
+    $ phi file.pi
+\end{code}
 
 \subsection{Language Syntax}
