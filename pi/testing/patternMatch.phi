@@ -1,0 +1,4 @@
+let l = list(1,2,3) in
+    let list(first,rest) = l in 
+        out(stdout,first);
+        out(stdout,rest)

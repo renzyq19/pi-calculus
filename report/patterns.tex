@@ -1,2 +1,106 @@
-\section{Pattern Matching and Deconstruction}
+\section{Pattern Matching and Destructuring}
 \label{sec:patterns}
+
+\subsection{Pattern Matching}
+Pattern Matching is the act of searching a given structure for a set of substructures and matching against them. This is best explained using an example, so in Haskell, pattern matching on a list would look like this:
+
+\label{example:pmatchhask}
+\begin{code}
+patternMatchExample :: IO ()
+patternMatchExample = do
+        let list = [1,2,3]
+        let first:rest = list
+        print first
+        print rest
+\end{code}
+and running this example gives the following result
+\begin{code}
+    ghci>patternMatchExample 
+    1
+    [2,3]
+\end{code}
+
+So to explain:
+\begin{enumerate}
+    \item We create a list with the elements 1,2 and 3
+    \item We pattern match the list against the pattern ( $first:rest$ ) which will match $first$ to 1 and $rest$ to the remainder of the list (i.e. $[2,3]$)
+    \item We output $first$
+\end{enumerate}
+
+In phi we would like to be able to write
+
+\begin{code}
+let l = list(1,2,3) in
+    let list(first,rest) = l in
+        out(stdout,first);
+        out(stdout,rest)
+\end{code}
+
+and for it to give the result:
+
+\begin{code}
+% phi patternMatch.phi
+1
+list(2,3)
+\end{code}
+
+When we first set out on our implementation, we had little to no idea how we were going to achieve pattern matching. It was a concept with which we were quite familiar, having used it in Haskell extensively, but we had never implemented anything like it before.
+Initially we tried to find any existing packages that might help us, but our search came up short. There were a few libraries which seemed like they might have been helpful, but ultimately were so badly documented that it was impossible to tell exactly what they did and how to use them. 
+Having failed to find a library, we decided we would have to build our own system from scratch. As such we began to research how the functionality was implemented in other languages, which quickly lead us to Simon Peyton Jones' (one of the main designers of Haskell) book The Implementation of Functional Programming Languages \cite{spj87}. Chapters 4 and 5 go into the semantics and efficient implementation of pattern matching in great depth. However, we quickly realised that the
+implementations we were reading about were far above what we currently needed for phi. This is because phi
+does not (currently) allow users to define their own types and structures beyond combining the ones already in the language, so realised we could get away with a fairly basic pattern matching strategy. This is described in the next section.
+
+\subsection{Implementation}
+
+Our PatternMatching module exports a single function
+\begin{code}
+match :: Term -> Term -> ThrowsError [(Name,Value)]
+\end{code}
+which we use to pattern match two terms and return an associative list of variable names and values against which these names have matched (all within the $ThrowsError$ monad, again meaning that this function can fail gracefully). This function is just wrapper around the main workhorse of this module
+\begin{code}
+match' :: Term -> Term -> ThrowsError [(Name,Term)]
+\end{code}
+Which does almost the same thing, but returns a list of names and terms instead.
+
+Pattern Matching generally operates over tree-like structures. There are currently four of these in our pi-calculus implementation (not including wrappers such as $headers$ and $cookies$): 
+
+\begin{code}
+    1. list(a,b..)
+    2. pair(a,b)
+    3. httpReq(uri,headers,method)
+    4. httpResp(code,reason,headers,body)
+\end{code}
+
+As it stands we can handle all of these. However, if we were to add new structures to our implementation, it would require us to extend our match' function. 
+
+The body of this function is as follows
+\begin{code}
+1  match' (TVar name _) term = case name of                                                
+2                                 '_':_ -> return []
+3                                 _     -> return [(name,term)]
+4  match' (TPair (m1, m2)) (TPair (t1,t2)) = liftM2 (++) (match' m1 t1)  (match' m2 t2)
+5  match' (TList (m:ms)) (TList (t:ts)) = do
+6                 bind <- match' m t
+7                 rest <- case ms of
+8                    [v] -> match' v $ TList ts
+9                    _   -> match' (TList ms) (TList ts)
+10                return $ bind ++ rest
+11 match' l@(TList _) (TData d) = match' l $ dataToList d
+12 match' t1 t2 = throwError $ PatternMatch t1 t2
+\end{code}
+
+Going through this line by line:
+\begin{enumerate}
+    \item    
+    \item    
+    \item    
+    \item    
+    \item    
+    \item    
+    \item    
+    \item    
+    \item    
+    \item    
+    \item    
+    \item    
+\end{enumerate}

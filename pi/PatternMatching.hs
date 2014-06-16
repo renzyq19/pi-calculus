@@ -7,10 +7,10 @@ import TypDefs
 --import Parser (readTerm)
 import Network.HTTP.Base 
 
-match :: Term -> Term -> ThrowsError [(String,Value)]
+match :: Term -> Term -> ThrowsError [(Name,Value)]
 match a b = liftM (map (second Term)) $ match' a b
 
-match' :: Term -> Term -> ThrowsError [(String,Term)]
+match' :: Term -> Term -> ThrowsError [(Name,Term)]
 match' (TVar name _) term = case name of
                                 '_':_ -> return []
                                 _     -> return [(name,term)]

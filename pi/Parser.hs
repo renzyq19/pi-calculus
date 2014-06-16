@@ -200,11 +200,11 @@ parseProcess = liftM (\ps -> case ps of
 parseType :: Parser Type
 parseType =  try (str HttpRequest)
          <|> try (str HttpResponse)
-         <|> try (str Header)
-         <|> parseListType
+         -- <|> try (str Header)
+         -- <|> parseListType
          where
          str t = string (show t) >> return t
-         parseListType = string "List" >> many1 space >> fmap List parseType 
+         --parseListType = string "List" >> many1 space >> fmap List parseType 
         
 
 bracketed :: Parser a -> Parser a

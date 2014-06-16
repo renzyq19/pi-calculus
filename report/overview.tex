@@ -14,11 +14,11 @@ This module contains all of the parsing logic for our program. It exports the fu
 
 This module contains the logic for channels. The most important functions this module exports are
 
-\begin{enumerate}
-    \item $newChan$ - creates either the server end or client end of a socket channel (depending on which $BuildType$ is passed as an argument) 
-    \item $stdChan$ - creates a channel for a standard input/output (i.e. stdout,stderr,stdin)
-    \item $newDummyChan$ - creates a channel which can only communicate within a process
-\end{enumerate}
+\begin{description}
+    \item[$newChan$] creates either the server end or client end of a socket channel (depending on which $BuildType$ is passed as an argument) 
+    \item[$stdChan$] creates a channel for a standard input/output (i.e. stdout,stderr,stdin)
+    \item[$newDummyChan$] creates a channel which can only communicate within a process
+\end{description}
 
 See section \ref{sec:channels}
 
