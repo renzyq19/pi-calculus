@@ -100,9 +100,9 @@ The constructors are described as follows:
     \item[$Let$] Represents the assignment of a variable, or function to a value or function body. The Maybe PiProcess here represents the possibility either of locally assigning the variable in the process found within the Just constructor, or globally assigning the variable if the Maybe is Nothing.
     \item[$If$] Represents the conditional execution of either the first process if the Condition is true, or the second process if it is false. Conditions are explained in section \ref{para:condition}
     \item[$Atom$] Represents a reference to a process, either as a TFun or a TVar.\footnote{These must evaluate to a PiProcess, or else an error will occur}
-\end{desription}
+\end{description}
 
-The Atom constructor was added to the language in order to allow calling process functions. We encountered a problem when we were implementing the language in that we had the ability to define process functions and references to processes using let, but had no way of calling them within our PiProcess type at the time. Our solution was to add this constructor, which is used by prepending "$&$" to a bare Term. See section \ref{eg:recursivecall} for an example of its use.
+The Atom constructor was added to the language in order to allow calling process functions. We encountered a problem when we were implementing the language in that we had the ability to define process functions and references to processes using let, but had no way of calling them within our PiProcess type at the time. Our solution was to add this constructor, which is used by prepending "\&" to a bare Term. See section \ref{eg:recursivecall} for an example of its use.
 \paragraph{Condition}
 \label{para:condition}
 
@@ -231,6 +231,19 @@ type TermFun = [Term] -> ThrowsError Term
 
 So a TermFun is a function which takes a list of Terms and can either throw an error or return a Term
 
-
 \subsection{Parser}
 \label{subsec:parser}
+
+As mentioned in section \ref{sec:bgparsing} we have used Parsec in order to build our parser. The Parser module exports the following functions:
+
+\begin{minted}[linenos,frame=lines]{hs}
+readTerm :: String -> ThrowsError Term 
+readProcess :: String -> ThrowsError PiProcess
+readProcesses :: String -> ThrowsError [PiProcess]
+\end{minted}
+
+All three of which take a String and they return a Term, a PiProcess or a list or PiProcesses respectively in the ThrowsError monad. 
+
+The full code for our parser implementation can be found in appendix \ref{sec:parserimplementation}
+
+

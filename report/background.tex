@@ -149,6 +149,7 @@ It is also good to note that malformed structures will fail:
 \end{code}
 
 \subsubsection{Parsec}
+\label{sec:bgparsing}
 
 Parsec is a monadic parser combinator library for Haskell which is fast, robust, simple and well-documented \cite{lm01}. We use parsec by building a series of low-level parsers and combining them into a single high level one.
 For example, if we start with a low-level parser to match brackets, from that we can build a higher level parser which can then return the contents of those brackets as a list of strings:

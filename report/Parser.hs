@@ -8,7 +8,7 @@ import Control.Monad (liftM)
 import Control.Monad.Error (throwError)
 import Text.ParserCombinators.Parsec
 
-import TypDefs (Condition (..), PiProcess (..), Term (..), Type(..), Value(..), Name, PiError(Parser), ThrowsError)
+import TypDefs 
 
 parseNull :: Parser PiProcess
 parseNull = char '0' >> return Null <?> "parse null"
@@ -195,16 +195,11 @@ parseProcess = liftM (\ps -> case ps of
                  <|> parseNew
                  <|> parseAtom
 
-
-
 parseType :: Parser Type
 parseType =  try (str HttpRequest)
          <|> try (str HttpResponse)
-         -- <|> try (str Header)
-         -- <|> parseListType
          where
          str t = string (show t) >> return t
-         --parseListType = string "List" >> many1 space >> fmap List parseType 
         
 
 bracketed :: Parser a -> Parser a
@@ -222,4 +217,4 @@ readProcesses :: String -> ThrowsError [PiProcess]
 readProcesses = readOrThrow parseProcesses "multiple-processes"
 
 readTerm :: String -> ThrowsError Term 
-readTerm = readOrThrow parseTerm "term"
+readTerm = readOrThrow parseTerm "term" 
