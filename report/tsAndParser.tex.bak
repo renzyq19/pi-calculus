@@ -5,7 +5,70 @@ In this section, we will describe the data structures we use to represent the th
 \subsection{Types}
 \label{subsec:types}
 
+\subsubsection{Terms}
+
+The most fundamental data type in our implementation is the $Term$. Terms are used to represent data, variables and functions.
+
+\begin{minted}[linenos,frame=lines]{hs}
+data Term = TStr String        
+          | TNum Integer
+          | TBool Bool
+          | TBS ByteString
+          | TData HttpData
+          | TPair (Term, Term)
+          | TList [Term]
+          | TVar Name (Maybe Type)
+          | TFun Name [Term]
+            deriving (Eq)
+instance Show Term where show = showTerm
+
+type Name = String
+\end{minted}
+We can see that terms derive Eq, meaning that two terms with the same contents, when compared with $==$ will return $True$. We derive our own instance of Show, which appropriately unwraps each of the above. $Name$ is simple a type synonym for $String$.
+
+TStr, TNum, TBool, and TBS are just simple wrappers for their respective types (String, Integer, Bool and ByteString), to allow us to manipulate them together in Haskells type system.
+
+TData is a wrapper for HttpData, which is explained in \ref{para:httpdata}
+
+The next few are slightly more complicated. TPair is a wrapper around Haskells own Tuple type, which can recursively hold two Terms. TList is a wrapper around Haskell's List type, which holds a list of Terms.
+
+TVar is used as a variable. It is constructed using a Name (String) and a Maybe Type. Maybe is a data type in the Haskell Prelude that allows either for a value (using the constructor Just, e.g. Just 1) or no value (using the Nothing constructor). This means that we allow a variable to have no type, but it is possible to construct a variable with a type. Type itself only has two constructors: 
+
+\paragraph{Type}
+\begin{minted}[linenos,frame=lines]{hs}
+data Type = HttpRequest
+          | HttpResponse
+          deriving (Eq, Read, Show)
+\end{minted}
+These are currently only used when receiving data in from an external channel, which is explained in section \ref{sec:channels}
+
+Finally, a TFun is constructed with a Name and a list of Terms. They represent a function (either over terms or over processes).\footnote{It would have been possible to do away with both TPair and TList, and simply had a special case of TFun (which is in fact how they are constructed in the Parser) but we found that this quickly became tedious, so we created these special types which made manipulating them easier.}
+
+\paragraph{HttpData}
+\label{para:httpdata}
+
+HttpData is itself a wrapper around the $Response$ and $Request$ type constructors from the Network.HTTP.Base \cite{hack:httpBase} module. Again, we began our implementation with these being special cases of TFun, however we found ourselves converting to and from Reponses and Requests that we cut out the middle TFun and added them to our Term structure.
+\begin{minted}[linenos,frame=lines]{hs}
+data HttpData = Resp (Response String)
+              | Req  (Request String)
+
+instance Show HttpData where show = showHttpData
+instance Eq HttpData where (==) = eqHttpData
+\end{minted}
+
+We created our own instances of Show and Eq in order to unwrap the reponses/requests from our constructors. 
+
+We also had to unwrap reponses and requests from our constructors when creating an instance of HasHeaders \cite{hack:Headers} which is a typeclass used in many header manipulation functions of the HTTP module
+\begin{minted}[linenos,frame=lines]{hs}
+instance HasHeaders HttpData where
+    getHeaders (Resp r) = getHeaders r
+    getHeaders (Req r)  = getHeaders r
+    setHeaders (Resp r) = Resp . setHeaders r
+    setHeaders (Req r)  = Req . setHeaders r
+\end{minted}
 \subsubsection{Processes}
+
+Processes are modelled with the $PiProcess$ data type.\footnote{N.B. This is merely how processes are modelled, not how they are actually implemented, this is covered in section \ref{sec:processes}}
 
 \begin{minted}[linenos,frame=lines]{hs}
 data PiProcess = Null
@@ -21,48 +84,19 @@ data PiProcess = Null
                  deriving (Eq)
 
 instance Show PiProcess where show = showPi
+\end{minted}
+
+
+
+\paragraph{Condition}
+
+Conditions are modelled with a very simple data type. They s
+
 \begin{minted}[linenos,frame=lines]{hs}
 data Condition = Term `Equals` Term deriving (Eq)
 
 instance Show Condition where show = showCond
-\end{minted}
 
-\subsubsubsection{HTTP Data}
-\end{minted}
-\subsubsection{Terms}
-
-\begin{minted}[linenos,frame=lines]{hs}
-data Term = TVar Name (Maybe Type)
-          | TStr String
-          | TNum Integer
-          | TBool Bool
-          | TPair (Term, Term)
-          | TList [Term]
-          | TBS ByteString
-          | TData HttpData
-          | TFun Name [Term]
-            deriving (Eq)
-instance Show Term where show = showTerm
-
-type Name = String
-\end{minted}
-
-\subsubsubsection{HTTP Data}
-
-\begin{minted}[linenos,frame=lines]{hs}
-data HttpData = Resp (Response String)
-              | Req  (Request String)
-
-instance Show HttpData where show = showHttpData
-instance Eq HttpData where (==) = eqHttpData
-\end{minted}
-
-\begin{minted}[linenos,frame=lines]{hs}
-instance HasHeaders HttpData where
-    getHeaders (Resp r) = getHeaders r
-    getHeaders (Req r)  = getHeaders r
-    setHeaders (Resp r) = Resp . setHeaders r
-    setHeaders (Req r)  = Req . setHeaders r
 \end{minted}
 
 \subsubsection{Channels}
@@ -111,18 +145,6 @@ data PiError = NumArgs Name Integer [Value]
 instance Show PiError where show = showError
 \end{minted}
 
-
-
-\begin{description}
-    \item[$Null$] Represents the null, or terminal process
-    \item[$In$] Represents a process receiving data in on a channel
-    \item[$Out$] Represents a process sending data out on a channel
-    \item[$New$] Represents the reservation of a variable name 
-    \item[$Seq$] Represents the sequential composition of two processes
-    \item[$Conc$] Represents the concurrent composition of a list of processes
-    \item[$Replicate$] Represents the infinite concurrent composition of a process with itself
-    \item[$Let$] Represents the 
-\end{desription}
 
 \subsection{Parser}
 \label{subsec:parser}
