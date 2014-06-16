@@ -7,13 +7,13 @@ Process modelling languages are based upon the principles of processes communica
 
 As described in section \ref{subsec:types}, our data type representing a Channel is as follows:
 
-\begin{code}
+\begin{minted}{hs}
 data Channel = Channel {
                send         :: String -> IO ()
              , receive      :: IO String
              , extra        :: [String]
              }
-\end{code}
+\end{minted}
 
 In other words, a $Channel$ is modelled as an object with a $send$ function, which takes a string and sends it somewhere, a $receive$ function, which returns a string in the IO monad, and some other data, $extra$, as a list of strings.
 

@@ -21,14 +21,13 @@ data PiProcess = Null
                  deriving (Eq)
 
 instance Show PiProcess where show = showPi
-\end{minted}
-
-\paragraph{Condition}
 \begin{minted}[linenos,frame=lines]{hs}
 data Condition = Term `Equals` Term deriving (Eq)
 
 instance Show Condition where show = showCond
+\end{minted}
 
+\subsubsubsection{HTTP Data}
 \end{minted}
 \subsubsection{Terms}
 
@@ -48,7 +47,7 @@ instance Show Term where show = showTerm
 type Name = String
 \end{minted}
 
-\paragraph{HTTP Data}
+\subsubsubsection{HTTP Data}
 
 \begin{minted}[linenos,frame=lines]{hs}
 data HttpData = Resp (Response String)
@@ -112,6 +111,18 @@ data PiError = NumArgs Name Integer [Value]
 instance Show PiError where show = showError
 \end{minted}
 
+
+
+\begin{description}
+    \item[$Null$] Represents the null, or terminal process
+    \item[$In$] Represents a process receiving data in on a channel
+    \item[$Out$] Represents a process sending data out on a channel
+    \item[$New$] Represents the reservation of a variable name 
+    \item[$Seq$] Represents the sequential composition of two processes
+    \item[$Conc$] Represents the concurrent composition of a list of processes
+    \item[$Replicate$] Represents the infinite concurrent composition of a process with itself
+    \item[$Let$] Represents the 
+\end{desription}
 
 \subsection{Parser}
 \label{subsec:parser}

@@ -1,4 +1,4 @@
-TEX = rubber --pdf
+TEX =openout_any=a rubber --shell-escape --pdf
 .PHONY: clean all
 
 all: clean spellcheck report.pdf
@@ -11,9 +11,9 @@ report.pdf: report.aux
 
 report.aux:  *.tex
 
-background.tex: sockets.lhs
-pi-calc.tex: pi-calc.lhs
-prims.tex: prims.lhs
+background.tex: sockets.hs pi-calc.hs
+primitives.tex: prims.lhs
+typedefs.tex: typedefs.lhs
 
 clean: 
 	$(TEX) --clean report.tex

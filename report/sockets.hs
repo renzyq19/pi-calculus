@@ -1,6 +1,3 @@
-%import polycode.ftm
-
-\begin{code}
 import Control.Monad (forever,unless)
 import Control.Concurrent (forkFinally, forkIO)
 import Control.Monad.IO.Class (liftIO)
@@ -34,5 +31,3 @@ main :: IO ()
 main = do
     _ <- forkIO $ server
     client
-    
-\end{code}

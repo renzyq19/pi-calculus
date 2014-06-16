@@ -1,11 +1,4 @@
-\documentclass[11pt,a4paper]{combine}
-\usepackage{hyperref}
-\usepackage{graphicx}
-\usepackage{syntax}
-\usepackage{listings}
-\usepackage{minted}
-\usemintedstyle{trac}
-\lstloadlanguages{haskell}
+
 \lstnewenvironment{code}
     {\lstset{}%
         \csname lst@SetFirstLabel\endcsname}
@@ -23,30 +16,3 @@
                     {>>}{{>>}}2 {>>=}{{>>=}}2
                     {|}{{$\mid$}}1               
     }
-    \newcommand{\HRule}{\rule{\linewidth}{0.5mm}}
-
-\begin{document}
-
-\input{./title.tex}
-
-\include{./abstract}
-\include{./acknowledgements}
-\tableofcontents
-\include{./introduction}
-\include{./background}
-\include{./overview}
-\include{./tsAndParser}
-\include{./csAndPs}
-\include{./primitives}
-\include{./patterns}
-\include{./phi}
-\include{./evaluation}
-\include{./extension}
-
-\appendix
-\include{./user-guide}
-
-\bibliographystyle{alpha}
-\bibliography{bibliography}{}
-
-\end{document}

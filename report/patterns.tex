@@ -3,14 +3,14 @@
 Pattern Matching is the act of searching a given structure for a set of substructures and matching against them. This is best explained using an example, so in Haskell, pattern matching on a list would look like this:
 
 \label{example:pmatchhask}
-\begin{code}
+\begin{minted}{hs}
 patternMatchExample :: IO ()
 patternMatchExample = do
         let list = [1,2,3]
         let first:rest = list
         print first
         print rest
-\end{code}
+\end{minted}
 and running this example gives the following result
 \begin{code}
     ghci>patternMatchExample 
@@ -51,13 +51,13 @@ does not (currently) allow users to define their own types and structures beyond
 \subsection{Implementation}
 
 Our PatternMatching module exports a single function
-\begin{code}
+\begin{minted}{hs}
 match :: Term -> Term -> ThrowsError [(Name,Value)]
-\end{code}
+\end{minted}
 which we use to pattern match two terms and return an associative list of variable names and values against which these names have matched (all within the $ThrowsError$ monad, again meaning that this function can fail gracefully). This function is just wrapper around the main workhorse of this module
-\begin{code}
+\begin{minted}{hs}
 match' :: Term -> Term -> ThrowsError [(Name,Term)]
-\end{code}
+\end{minted}
 Which does almost the same thing, but returns a list of names and terms instead.
 
 Pattern Matching generally operates over tree-like structures. There are currently four of these in our pi-calculus implementation (not including wrappers such as $headers$ and $cookies$): 
@@ -73,7 +73,7 @@ Pattern Matching generally operates over tree-like structures. There are current
 As it stands we can handle all of these. However, if we were to add new structures to our implementation, it would require us to extend our match' function. 
 
 The body of this function is as follows
-\begin{code}
+\begin{minted}{hs}
 1  match' (TVar name _) term = case name of                                                
 2                                 '_':_ -> return []
 3                                 _     -> return [(name,term)]
@@ -88,7 +88,7 @@ The body of this function is as follows
 11                return $ bind ++ rest
 12 match' l@(TList _) (TData d) = match' l $ dataToList d
 13 match' t1 t2 = throwError $ PatternMatch t1 t2
-\end{code}
+\end{minted}
 
 Going through this line by line:
 \begin{enumerate}

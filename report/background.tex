@@ -124,7 +124,7 @@ Haskell makes it trivial to create data types. As such we can easily use Haskell
 
 A small subset of this is presented below, we will go into more detail in Section \ref{sec:types}
     
-\input{pi-calc.lhs}
+\inputminted[linenos,frame=lines]{hs}{pi-calc.hs}
 
 We can test this as follows with the basic input from our introduction (of course these currently hold no intrinsic meaning, but this will be implemented later)
 
@@ -153,7 +153,7 @@ It is also good to note that malformed structures will fail:
 Parsec is a monadic parser combinator library for Haskell which is fast, robust, simple and well-documented \cite{lm01}. We use parsec by building a series of low-level parsers and combining them into a single high level one.
 For example, if we start with a low-level parser to match brackets, from that we can build a higher level parser which can then return the contents of those brackets as a list of strings:
 
-\begin{code}
+\begin{minted}[linenos,frame=lines]{hs}
 import Text.ParserCombinators.Parsec
 
 openB :: Parser Char
@@ -171,7 +171,7 @@ betweenB = do{
     where
         line = sepBy word (char ',')
         word = many ( noneOf ",)")
-\end{code}
+\end{minted}
 
 We can test this parser using the parseTest function as follows:
 
@@ -191,7 +191,7 @@ This function also fails on malformed input
 
 From here, it is only a short step to build a parser for the basic \verb!in,out! syntax of the language. The following is a slightly untidy, but quickly built proof of concept parser to demonstrate the ease with which this can be achieved:
 
-\begin{code}
+\begin{minted}[linenos,frame=lines]{hs}
 inOut :: Parser PiProcess
 inOut = do {
         piIn;
@@ -210,7 +210,7 @@ inOut = do {
             piIn= string "in"
             piOut=string "out" 
             e x= "malformed input " ++ x ++ " expected"
-\end{code}
+\end{minted}
 
 And a demonstration of this in action (removing our custom show instance, as otherwise, because we chose to make it appear like the input, it seems like nothing is happening). Once more, malformed input throws errors depending on what exactly went wrong: 
 
@@ -244,7 +244,7 @@ And a demonstration of this in action (removing our custom show instance, as oth
 Once we have parsed our input and built our syntax tree, we must then semantically analyse the input and generate the processes required. As mentioned before we will be using the Haskell Network module  for our initial implementation. This provides a high-level interface to network functionality in Haskell. We create handles from incoming connections on sockets on the server side, and on the client side we generate a handle by connecting to a foreign host on a specified port. An example
 of this is as follows: 
 
-\input{sockets.lhs}
+\inputminted[linenos,frame=lines]{hs}{sockets.hs}
 
 This small program creates two processes (which here are two GHC threads created with $forkIO$) . The client continuously reads from stdin and then sends the information over the socket, and the server receives the data from the socket and sends it back. In other words, written in our version of the applied $\pi$-calculus it does:
 \begin{verbatim}

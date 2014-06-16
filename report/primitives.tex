@@ -2,17 +2,17 @@
 \label{sec:primitives}
 
 The Primitives module exports an associative list 
-\begin{code}
+\begin{minted}{haskell}
 primitives :: [(Name,TermFun)]
-\end{code} 
+\end{minted}
 which maps the names of primitive functions to $TermFun$ s. As explained in section \ref{subsec:types}, 
-\begin{code}
+\begin{minted}{haskell}
     type TermFun = [Term] -> ThrowsError Term
-\end{code}
+\end{minted}
 and
-\begin{code}
+\begin{minted}{haskell}
     type ThrowsError a = Either PiError a
-\end{code}
+\end{minted}
 This means each of these functions will be passed a list of terms, and then has the possibility of returning a result (a $Term$ ) or an error ( a $PiError$ )
 As such, any malformed or incorrect inputs will fail gracefully and be handled appropriately.
 
@@ -20,6 +20,6 @@ We have implemented a large set of primitives with which you can manipulate Term
  
 \subsection{Definitions and Explanations}
 
-\input{prims}
+\input{prims.lhs}
 
 Hopefully it is clear that we have built this set of primitives in such a way that allows for the user to compose them easily and build their own functions. An example of this can be found in the $pilude$: $getLocation(httpRequest)$ -- defined as $getHeader("location",httpRequest)$
