@@ -88,7 +88,7 @@ data Type = HttpRequest
           | HttpResponse
           deriving (Eq, Read, Show)
 
-type Env = IORef (Map String Value)
+type Env = IORef (Map Name Value)
 
 data Channel = Channel {
                send         :: String -> IO ()

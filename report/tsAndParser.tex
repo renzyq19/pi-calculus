@@ -85,21 +85,41 @@ data PiProcess = Null
 
 instance Show PiProcess where show = showPi
 \end{minted}
+This data type derives Eq and we defined our own Show instance (the output of which is identical to our defined syntax for the language). 
 
+The constructors are described as follows:
 
+\begin{description}
+    \item[$Null$] Represents the null, or terminal process
+    \item[$In$] Represents a process receiving data in on a channel. The first term should be either a TFun which evaluates to a channel, or a variable pointing to one, and the second should be a variable
+    \item[$Out$] Represents a process sending data out on a channel. The first term should evaluate to a channel, as in In, and the second can be a term of any type
+    \item[$New$] Represents the reservation of a variable name 
+    \item[$Seq$] Represents the sequential composition of two processes
+    \item[$Conc$] Represents the concurrent composition of a list of processes
+    \item[$Replicate$] Represents the infinite concurrent composition of a process with itself
+    \item[$Let$] Represents the assignment of a variable, or function to a value or function body. The Maybe PiProcess here represents the possibility either of locally assigning the variable in the process found within the Just constructor, or globally assigning the variable if the Maybe is Nothing.
+    \item[$If$] Represents the conditional execution of either the first process if the Condition is true, or the second process if it is false. Conditions are explained in section \ref{para:condition}
+    \item[$Atom$] Represents a reference to a process, either as a TFun or a TVar.\footnote{These must evaluate to a PiProcess, or else an error will occur}
+\end{desription}
 
+The Atom constructor was added to the language in order to allow calling process functions. We encountered a problem when we were implementing the language in that we had the ability to define process functions and references to processes using let, but had no way of calling them within our PiProcess type at the time. Our solution was to add this constructor, which is used by prepending "$&$" to a bare Term. See section \ref{eg:recursivecall} for an example of its use.
 \paragraph{Condition}
+\label{para:condition}
 
-Conditions are modelled with a very simple data type. They s
+Conditions are modelled with a very simple data type. They currently only allow a single constructor:
 
 \begin{minted}[linenos,frame=lines]{hs}
 data Condition = Term `Equals` Term deriving (Eq)
 
 instance Show Condition where show = showCond
-
 \end{minted}
 
+We had thought that we would need to extend this, however we found that no other conditional types were needed. There is still the possibility to provide this extension later.
+
 \subsubsection{Channels}
+
+A Channel is modelled as follows:
+
 \begin{minted}[linenos,frame=lines]{hs}
 data Channel = Channel {
                send         :: String -> IO ()
@@ -107,7 +127,20 @@ data Channel = Channel {
              , extra        :: [String]
              }
 \end{minted}
+
+We have a single constructor, Channel, which takes two functions and a list of strings:
+\begin{description}
+    \item[$send$] Any function which takes a string and returns IO (). It is of course intended that this sends this string to a destination, although what this destination is and how this is achieved is not specified here.
+    \item[$receive$] Any function which produces a String in the IO monad. Again, this function is intended to retrieve this string from some source, but once again this is not specified here.
+    \item[$extra$] Contains any extra data that might be associated with the channel. This is used in the serialisation of Channels which we explain in more detail in section \ref{sec:serialisingChannels}.
+\end{description}
+
+The actual implementation of a Channel is left deliberately vague, to allow for many different types of channels to be built. In section \ref{sec:channels} we give our implementations.
+
 \subsubsection{Values}
+
+Values are the data type we use to represent all of our types in the single environment we pass around our evaluation strategy (see section \ref{sec:main})
+
 \begin{minted}[linenos,frame=lines]{hs}
 data Value = Proc PiProcess 
            | Term Term
@@ -118,6 +151,13 @@ data Value = Proc PiProcess
 instance Show Value where show = showVal
 instance Eq Value where (==) = eqvVal
 \end{minted}
+
+The first three are simply wrappers around the data types we have described so far.
+PrimitiveFunc models a primitive Term function, and contains a TermFun, defined in section \ref{sec:termfun}
+Func models a user defined function, which holds a list of parameters (as a list of Strings), a function body (itself a Value), and a closure within which the function is evaluated (as an Env, the type of which is described in section \ref{sec:environment}). The implementation of these two will be explained in section \ref{sec:main}
+
+We define our own instances of Show and Eq
+
 \begin{minted}[linenos,frame=lines]{hs}
 showValue :: Value -> String
 showValue (Proc p)  = show p
@@ -128,8 +168,29 @@ showValue (Chan c)  = show (convert c)
             where ex = extra ch
 showValue (PrimitiveFunc _)  = "<primitive>" 
 showValue (Func {})          = "<user function>"  
+
+eqvVal :: Value -> Value -> Bool
+eqvVal (Proc p1)  (Proc p2) = p1 == p2
+eqvVal (Term t1)  (Term t2) = t1 == t2
+eqvVal _ _ = False
 \end{minted}
+
+Our show implementation is uninteresting, besides for showing Channels. This is essentially a hack for serialising channels\footnote{When we receive a term in a phi process, we check to see whether it has the special name "<chan>" and then try to build a channel from the data in the arguments, we go into this in more detail in section\ref{sec:serialisingChannels}}
+
+\subsubsection{Environment}
+\label{sec:environment}
+
+
+\begin{minted}[linenos,frame=lines]{hs}
+type Env = IORef (Map String Value)
+\end{minted}
+
+We model our environment as an IO Reference to a Map of Strings to Values. An IO Reference, or IORef \cite{hack:ioref} can be thought of as a pointer to some mutable state in the IO monad. Our environment will obviously change through our implementation, and so we need to model this mutability. We chose IORefs over other possible mutability models because they are fast, and we are already operating within the IO monad for a lot of our evaluation strategy.
+
 \subsubsection{Error Handling}
+
+Finally, we have our data type representing errors in our evaluation and/or parsing.
+
 \begin{minted}[linenos,frame=lines]{hs}
 data PiError = NumArgs Name Integer [Value]
              | TypeMismatch String [Value]
@@ -144,6 +205,31 @@ data PiError = NumArgs Name Integer [Value]
 
 instance Show PiError where show = showError
 \end{minted}
+
+The purpose of these errors is fairly clear from the names of their constructors.
+
+We represent functions which can throw errors in two ways. They can have two return types:
+
+\begin{description}
+    \item[ThrowsError a] meaning they return either a PiError (which is raised using throwError from the Control.Monad.Error module \cite{hack:monadError}) or return something of type a (using return, which lifts a value into the Either monad \cite{hack:either})
+    \item[IOThrowsError a] meaning they can return a PiError or a something of type a, but can also perform operations in the IO monad, internally using the ExceptT monad \cite{hack:monadExcept} which is an instance of the MonadIO typeclass \cite{hack:monadIO}.
+\end{description}
+
+The type synonyms for these are as follows
+
+\begin{minted}[linenos,frame=lines]{hs}
+type ThrowsError a   = Either  PiError a
+type IOThrowsError a = ExceptT PiError IO a
+\end{minted}
+
+We also have a type synonym for TermFun s
+
+\label{sec:termfun}
+\begin{minted}[linenos,frame=lines]{hs}
+type TermFun = [Term] -> ThrowsError Term
+\end{minted}
+
+So a TermFun is a function which takes a list of Terms and can either throw an error or return a Term
 
 
 \subsection{Parser}

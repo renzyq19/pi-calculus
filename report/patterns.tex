@@ -122,6 +122,7 @@ which outputs
 \end{code}
 
 This more complex example describes a function takes an HTTP channel and an HTTP request, sends out the request, receives in a response "resp", and matches against it. If the response code is 302 (Moved) then we get the new location from the headers, make a new HTTP request, and recursively call the function. Otherwise we print out the body of the response.
+\label{eg:recursivecall}
 \begin{code}
 let follow(ch,r) = (out(ch,r);in(ch,resp:HttpResponse);
     let list(c,_,_,b) = resp in
