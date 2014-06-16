@@ -16,12 +16,12 @@ match' (TVar name _) term = case name of
                                 _     -> return [(name,term)]
 match' (TPair (m1, m2)) (TPair (t1,t2)) = liftM2 (++) (match' m1 t1)  (match' m2 t2)
 match' (TList (m:ms)) (TList (t:ts)) = do
-                [bind] <- match' m t
+                bind <- match' m t
                 rest   <- case (ms,ts) of
                     ([v],[t']) -> match' v t'
                     ([v], _ ) -> match' v $ TList ts
                     _   -> match' (TList ms) (TList ts)
-                return $ bind : rest
+                return $ bind ++ rest
 match' l@(TList _) (TData d) = match' l $ dataToList d
 match' t1 t2 = throwError $ PatternMatch t1 t2
 

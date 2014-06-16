@@ -82,27 +82,52 @@ The body of this function is as follows
 4  match' (TPair (m1, m2)) (TPair (t1,t2)) = 
                     liftM2 (++) (match' m1 t1)  (match' m2 t2)
 5  match' (TList (m:ms)) (TList (t:ts)) = do
-6                 [bind] <- match' m t
-7                 rest <- case ms of
-8                    [v] -> match' v $ TList ts
-9                    _   -> match' (TList ms) (TList ts)
-10                return $ bind : rest
-11 match' l@(TList _) (TData d) = match' l $ dataToList d
-12 match' t1 t2 = throwError $ PatternMatch t1 t2
+6                 bind <- match' m t
+7                 rest <- case (ms,ts) of
+8                    ([v],[t']) -> match' v t'
+9                    ([v],_)    -> match' v $ TList ts
+10                    _         -> match' (TList ms) (TList ts)
+11                return $ bind ++ rest
+12 match' l@(TList _) (TData d) = match' l $ dataToList d
+13 match' t1 t2 = throwError $ PatternMatch t1 t2
 \end{code}
 
 Going through this line by line:
 \begin{enumerate}
     \item The basic principle of our matching function is that a bare variable should match against anything
-    \item If a variable name begins with an underscore, we ignore the binding. This is functionality we have borrowed from Haskell, allowing for wildcard pattern matching\footnote{We can see examples of this in this very piece of code. In line 1 for example, we match against $TVar name _$ , so we still match agains the last element, but we do not use it in this function and so do not care to give it a name}
+    \item If a variable name begins with an underscore, we ignore the binding. This is functionality we have borrowed from Haskell, allowing for wildcard pattern matching\footnote{We can see examples of this in this very piece of code. In line 1 for example, we match against TVar name \_ , so we still match against the last element, but we do not use it in this function and so do not care to give it a name}
     \item If the variable name does not begin with an underscore we return a singleton list containing a pair of the name and the matched term
     \item A pair matches against another pair recursively
     \item A list can match another list, provided they both have at least one element
     \item We start by matching the first elements of both lists and getting the bindings
-    \item We then check what the rest of the first list looks like   
+    \item We then check what the rest of the first and second lists looks like   
     \item If the rest of both lists is a singleton, match the two remaining values
-    \item If the pattern list is a singleton, but the list we are matching against is not, we match the final element with the rest of the list   
+    \item If the pattern list is a singleton, but the list we are matching against is not, we match the final element with the rest of the list 
     \item If neither of the lists is a singleton, we match the remaining elements recursively
-    \item A list can match an HTTP request or response. First we convert a the request/response to a list of the form given at \ref{list:patterns} dependant on which it is, and then we match against that list
+    \item We then return the rest of the bindings appended to the first bindings
+    \item A list can match an HTTP request or response. First we convert a the request/response to a list of the form given at \ref{list:patterns} dependent on which it is, and then we match against that list
     \item If we receive any other pattern and term combination, we throw an error   
 \end{enumerate}
+
+We end this section with a couple more examples of how one might use pattern matching in phi
+
+A rather convoluted example would be 
+\begin{code}
+let ls = list(1,pair(2,list(3,4,5)),6) in
+    let list(_,pair(_,list(x,_),_)) = ls in
+        out(stdout,x)
+\end{code}
+which outputs
+\begin{code}
+    % phi eg.pi
+
+\end{code}
+
+This more complex example describes a function takes an HTTP channel and an HTTP request, sends out the request, receives in a response "resp", and matches against it. If the response code is 302 (Moved) then we get the new location from the headers, make a new HTTP request, and recursively call the function. Otherwise we print out the body of the response.
+\begin{code}
+let follow(ch,r) = (out(ch,r);in(ch,resp:HttpResponse);
+    let list(c,_,_,b) = resp in
+        if c = 302 
+            then let req = httpReq(getHeader("location",resp),headers(),httpGet()) in &follow(ch,req) 
+            else out(stdout,b)) 
+\end{code}
