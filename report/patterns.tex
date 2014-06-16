@@ -39,9 +39,9 @@ let l = list(1,2,3) in
 and for it to give the result:
 
 \begin{code}
-% phi patternMatch.phi
-1
-list(2,3)
+    % phi patternMatch.phi
+    1
+    list(2,3)
 \end{code}
 
 When we first set out on our implementation, we had little to no idea how we were going to achieve pattern matching. It was a concept with which we were quite familiar, having used it in Haskell extensively, but we had never implemented anything like it before.
@@ -64,6 +64,7 @@ Which does almost the same thing, but returns a list of names and terms instead.
 
 Pattern Matching generally operates over tree-like structures. There are currently four of these in our pi-calculus implementation (not including wrappers such as $headers$ and $cookies$): 
 
+\label{list:patterns}
 \begin{code}
     1. list(a,b..)
     2. pair(a,b)
@@ -78,29 +79,30 @@ The body of this function is as follows
 1  match' (TVar name _) term = case name of                                                
 2                                 '_':_ -> return []
 3                                 _     -> return [(name,term)]
-4  match' (TPair (m1, m2)) (TPair (t1,t2)) = liftM2 (++) (match' m1 t1)  (match' m2 t2)
+4  match' (TPair (m1, m2)) (TPair (t1,t2)) = 
+                    liftM2 (++) (match' m1 t1)  (match' m2 t2)
 5  match' (TList (m:ms)) (TList (t:ts)) = do
-6                 bind <- match' m t
+6                 [bind] <- match' m t
 7                 rest <- case ms of
 8                    [v] -> match' v $ TList ts
 9                    _   -> match' (TList ms) (TList ts)
-10                return $ bind ++ rest
+10                return $ bind : rest
 11 match' l@(TList _) (TData d) = match' l $ dataToList d
 12 match' t1 t2 = throwError $ PatternMatch t1 t2
 \end{code}
 
 Going through this line by line:
 \begin{enumerate}
-    \item    
-    \item    
-    \item    
-    \item    
-    \item    
-    \item    
-    \item    
-    \item    
-    \item    
-    \item    
-    \item    
-    \item    
+    \item The basic principle of our matching function is that a bare variable should match against anything
+    \item If a variable name begins with an underscore, we ignore the binding. This is functionality we have borrowed from Haskell, allowing for wildcard pattern matching\footnote{We can see examples of this in this very piece of code. In line 1 for example, we match against TVar name \_ , so we still match against the last element, but we do not use it in this function and so do not care to give it a name}
+    \item If the variable name does not begin with an underscore we return a singleton list containing a pair of the name and the matched term
+    \item A pair matches against another pair recursively
+    \item A list can match another list, provided they both have at least one element
+    \item We start by matching the first elements of both lists and getting the bindings
+    \item We then check what the rest of the first list looks like   
+    \item If the rest of both lists is a singleton, match the two remaining values
+    \item If the pattern list is a singleton, but the list we are matching against is not, we match the final element with the rest of the list   
+    \item If neither of the lists is a singleton, we match the remaining elements recursively
+    \item A list can match an HTTP request or response. First we convert a the request/response to a list of the form given at \ref{list:patterns} dependent on which it is, and then we match against that list
+    \item If we receive any other pattern and term combination, we throw an error   
 \end{enumerate}
