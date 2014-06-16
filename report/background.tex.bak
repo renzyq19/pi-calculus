@@ -37,10 +37,10 @@ The applied $\pi$-calculus \cite{af01} is an extension of $\pi$-calculus \cite{m
 CCS is able to describe communications between two participants, and has all of the basic process algebra components as above. 
 $\pi$-calculus provides an important extension allowing channel names to be passed along channels. This allows it to model concurrent processes whose configurations are not constant.
 
-\subsection{Compilation}
+\subsection{Interpretation}
 
-Trying to compile a process based language presents several difficulties from the offset. Such a compiler needs to be able to generate processes, switch contexts, and perform cross-channel communication very quickly as these operations, which are normally considered computationally intensive, form the basis of any process calculus. \cite{pt97} 
-As such, it may be necessary either to reduce the feature set of the language in order to ensure that the compiler performs acceptably. 
+Trying to interpret a process based language presents several difficulties from the offset. Such an interpreter needs to be able to generate processes, switch contexts, and perform cross-channel communication very quickly as these operations, which are normally considered computationally intensive, form the basis of any process calculus. \cite{pt97} 
+As such, it may be necessary either to reduce the feature set of the language in order to ensure that the interpreter performs acceptably. 
 
 \subsection{The applied $\pi$-calculus}
 
@@ -94,7 +94,8 @@ As the Pict language did when creating an implementation of pure $\pi$-calculus 
 
 
 \begin{table}[hc!]
-    \begin{tabular}{r c l}
+    \begin{tabular}{l l}
+        $\emptyset$&\verb!0!\\
         $P|Q$& \verb!P | Q!\\
         $P.Q$& \verb!P ; Q!\\
         $!P$ & \verb?!P?\\
@@ -106,27 +107,29 @@ As the Pict language did when creating an implementation of pure $\pi$-calculus 
     \end{tabular}
 \end{table} 
 
-This will be the syntax we refer to from now on, and which we will be attempting to compile.
+This will be the syntax we refer to from now on, and which we will be attempting to interpret.
 
 \subsubsection{Starting Restrictions}
 
-The first build of our compiler will only be able to handle a few basic types and functions. We will also only be concerning ourselves with HTTP traffic, and to begin with our channels will be for the most part duplex handles built from sockets \cite{wiki:sockets} handled by the Haskell Network library \cite{hack:network}. The reasoning here is that getting to grips with the entirety of the low level C socket API (which is exposed by the Network.Socket module) would not be a productive use of time with respect to our main intended purpose (i.e. to handle HTTP traffic).
+The first build of our interpreter will only be able to handle a few basic types and functions. We will also only be concerning ourselves with HTTP traffic, and to begin with our channels will be for the most part duplex handles built from sockets \cite{wiki:sockets} handled by the Haskell Network library \cite{hack:network}. The reasoning here is that getting to grips with the entirety of the low level C socket API (which is exposed by the Network.Socket module) would not be a productive use of time with respect to our main intended purpose (i.e. to handle HTTP traffic).
 By limiting our initial approach, we can familiarise ourselves with some of the concepts of
 sockets and later on we can expand to more generic sockets if necessary and once our language implementation is sound.
 
 \subsection{Haskell}
 
-Haskell is a pure non-strict functional programming language based on the $\lambda$-calculus. It is a strongly static typed language making it easy to ensure correctness of programs. It is highly expressive, but this combined with its laziness comes at a potential price in terms of execution time. We may well find that it simply is not possible to build a responsive enough system using Haskell, but there are several advantages to using it to build a compiler.
+Haskell is a pure non-strict functional programming language based on the $\lambda$-calculus. It is a strongly static typed language making it easy to ensure correctness of programs. It is highly expressive, but this combined with its laziness comes at a potential price in terms of execution time. We may well find that it simply is not possible to build a responsive enough system using Haskell, but there are several advantages to using it to build an interpreter.
 
-\subsubsection{Abstract Data Type}
-Haskell makes it trivial to create abstract data types. As such we can easily use Haskell to build an abstract representation of our language, which we will later generate during the parsing process.
+\subsubsection{Data Type}
+Haskell makes it trivial to create data types. As such we can easily use Haskell to build an abstract representation of our language, which we will later generate during the parsing process.
+
+A small subset of this is presented below, we will go into more detail in Section \ref{sec:types}
     
-\input{pi-calc}
+\input{pi-calc.lhs}
 
 We can test this as follows with the basic input from our introduction (of course these currently hold no intrinsic meaning, but this will be implemented later)
 
 \begin{code}
-    ghci>(In "a" "x") `Seq` (Out "a" (TVar "x"))
+    ghci>(In "a" "x") `Seq' (Out "a" (TVar "x"))
     in(a,x);
     out(a,x)
 \end{code}
@@ -134,7 +137,7 @@ We can test this as follows with the basic input from our introduction (of cours
 It is also good to note that malformed structures will fail:
 
 \begin{code}
-    ghci>(In "a" "x") `Seq` (Out "a" )
+    ghci>(In "a" "x") `Seq' (Out "a" )
 
     <interactive>:34:21:
         Couldn't match expected type `PiProcess'
@@ -142,7 +145,7 @@ It is also good to note that malformed structures will fail:
         In the return type of a call of `Out'
         Probable cause: `Out' is applied to too few arguments
         In the second argument of `Seq', namely `(Out "a")'
-        In the expression: (In "a" "x") `Seq` (Out "a")
+        In the expression: (In "a" "x") `Seq' (Out "a")
 \end{code}
 
 \subsubsection{Parsec}
@@ -189,7 +192,6 @@ This function also fails on malformed input
 From here, it is only a short step to build a parser for the basic \verb!in,out! syntax of the language. The following is a slightly untidy, but quickly built proof of concept parser to demonstrate the ease with which this can be achieved:
 
 \begin{code}
-
 inOut :: Parser PiProcess
 inOut = do {
         piIn;
@@ -208,10 +210,10 @@ inOut = do {
             piIn= string "in"
             piOut=string "out" 
             e x= "malformed input " ++ x ++ " expected"
-            
 \end{code}
 
 And a demonstration of this in action (removing our custom show instance, as otherwise, because we chose to make it appear like the input, it seems like nothing is happening). Once more, malformed input throws errors depending on what exactly went wrong: 
+
 \begin{code}
     ghci>parseTest inOut "in(a,b)"
     In "a" "b"
@@ -244,7 +246,7 @@ of this is as follows:
 
 \input{sockets.lhs}
 
-This small program creates two processes. The client continuously reads from stdin and then sends the information over the socket, and the server receives the data from the socket and sends it back. In other words, written in our version of the applied $\pi$-calculus it does:
+This small program creates two processes (here modelled as two GHC threads created with $forkIO$) . The client continuously reads from stdin and then sends the information over the socket, and the server receives the data from the socket and sends it back. In other words, written in our version of the applied $\pi$-calculus it does:
 \begin{verbatim}
     !(in(stdin,x);
     out(socket(0.0.0.0,9000),x);
