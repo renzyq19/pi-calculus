@@ -68,7 +68,7 @@ which binds variable to value locally in process
 \end{code}
 which binds the function(..) to be body locally in process
 
-So to rewrite our second example:
+So to rewrite our second example: \footnote{N.B. Any whitespace over a single space around "in" is ignored, so the indentation above is optional, but nicer to read}
 \begin{code}
     out(stdout,"What is your name?");
     in(stdin,name);
@@ -76,7 +76,7 @@ So to rewrite our second example:
         let helloName = prependHello(name) in
             out(stdout,helloName)
 \end{code}
-N.B. Any whitespace above a single space around "in" is ignored, so the above formatting is personal preference
+
 
 or, if we are in the REPL (or a module file, which we will cover momentarily) we can define variables and functions globally by omitting the "in process"
 i.e.
@@ -85,16 +85,3 @@ i.e.
 \end{code}
 
 
-\begin{table}[hc!]
-    \begin{tabular}{l l}
-        \verb!0! & Null process\\
-        \verb!P | Q!& Run P $&$ Q concurrently\\
-        \verb!P ; Q!& Run P then Q\\
-        \verb?!P?& Run infinitely concurrent P\\
-        \verb!new x!& Reserve x\\
-        \verb!if t1 = t2 then P else Q! &\\
-        \verb!let X = M in P!&\\
-        \verb!in(chan,msg)! &\\
-        \verb!out(chan,msg)! &\\
-    \end{tabular}
-\end{table} 

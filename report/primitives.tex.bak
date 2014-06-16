@@ -5,7 +5,7 @@ The Primitives module exports an associative list
 \begin{code}
 primitives :: [(Name,TermFun)]
 \end{code} 
-which maps the names of primitive functions to $TermFun$ s. As explained in section ~\ref{subsec:types}, 
+which maps the names of primitive functions to $TermFun$ s. As explained in section \ref{subsec:types}, 
 \begin{code}
     type TermFun = [Term] -> ThrowsError Term
 \end{code}
