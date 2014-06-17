@@ -366,7 +366,8 @@ parseLet = do
             spaces
             name <- parseTerm
             paddedChar1 '='
-            val <- try (liftM Proc parseProcess) <|> liftM Term parseTerm
+            val <- try (liftM Proc parseProcess) 
+                    <|> liftM Term parseTerm
             p <- myOptionMaybe parseProcess (paddedStr1 "in") 
             return (Let name val p)
 \end{minted}
