@@ -1,13 +1,13 @@
 \section{Channels and Processes}
 \label{sec:channels}
 
-Process modelling languages are based upon the principles of processes communicating across channels. As such this part of our implementation is fairly key. 
+Process modelling languages are based upon the principles of processes communicating across channels. As such this part of our implementation was fairly key. 
 
 \subsection{Channels}
-
+We considered what would be the best way to model this vital part of our implementation, and decided upon a structure that was as flexible as possible.
 As described in section \ref{subsec:types}, our data type representing a Channel is as follows:
 
-\begin{minted}{hs}
+\begin{minted}[linenos,frame=lines]{hs}
 data Channel = Channel {
                send         :: String -> IO ()
              , receive      :: IO String
@@ -17,8 +17,117 @@ data Channel = Channel {
 
 In other words, a $Channel$ is modelled as an object with a $send$ function, which takes a string and sends it somewhere, a $receive$ function, which returns a string in the IO monad, and some other data, $extra$, as a list of strings.
 
+As we have touched upon before, we have put no restrictions what exactly the send and receive functions do. In most cases it makes sense that the string be sent to a receiving party on the other end, an receive be receiving from a sending party. However, it is conceivable that we create channels that do nothing of the sort. Our implementation allows us to create several completely different channel types with the same interface. Having said that, using specific channels incorrectly
+will result in unwanted behaviour (trying to write to stdin for example, will crash the interpreter).\footnote{We considered shielding this kind of operation from crashing, however it only really applies to the 3 standard file handles, and one should be alerted fairly swiftly if one were to mix them up} We also chose not to try and divorce our channel implementation from the rest of our modules as much as possible. It is the main program's responsibility to convert data into Strings
+before sending them onto a channel.
+
+The types of channel we have implemented so far are
+\begin{enumerate}
+    \item Standard Channels e.g. stdin etc.
+    \item Dummy Channels
+    \item Socket Channels
+\end{enumerate}
+and we will explain how each of this is implemented below.
+
+
 \subsubsection{Serialising Channels}
 \label{sec:serialisingChannels}
+Before we get into the implementation of types of Channels we would like to say a brief word on serialising Channels.
+If a Channel has a non-empty extra section, then we say that it is serialisable. Currently the only channels which are serialisable are Socket Channels. As we will discuss in section \ref{sec:socketChannels}, these contain information in their extra strings regarding where the server end of the socket is, which can then be connected to by whomever receives the channel.
+The functions which achieve this are: 
+
+\begin{minted}[frame=lines]{hs}
+makeExtra :: [String] -> [String] -> [String]
+makeExtra = zipWith (\a b -> (a ++ dataBreak : b))
+\end{minted}
+which zips two lists of strings together with a special character in the middle (currently it is just '#') to make our extra strings; 
+\begin{minted}[frame=lines]{hs}
+showValue (Chan c)  = show (convert c)
+    where 
+        convert ch = TFun "<chan>" (map TStr ex) 
+            where ex = extra ch
+\end{minted}
+which makes the "$\lt$chan$\gt$" TFun;
+and 
+\begin{minted}[frame=lines]{hs}
+getChannelData :: [String] -> Maybe (String, Integer)
+getChannelData strs = do
+        let ex = map (second tail . break (==dataBreak)) strs
+        host         <- lookup hostSig ex
+        port         <- lookup portSig ex
+        return (host,read port)
+\end{minted}
+on which breaks down the strings int their constituent parts on the receiving end. This final function will fail and return Nothing if the data is incomplete, or corrupted.
+
+We have no qualms about admitting that the serialisation/deserialisation mechanism we have in place for Channels is a bit of a "hack", piggy backing on our ability to parse a special "<chan>" TFun at the receiving end, but as it stands it works perfectly well, and it allows us to implement some interesting and exciting features.
+
+\subsubsection{Standard Channels}
+These are a simple wrapper around the three standard input and output channels stdin, stdout, and stderr.
+
+A standard channel is created by passing the handle for this channel to the following function:
+
+\begin{minted}[linenos,frame=lines]{hs}
+stdChan :: Handle -> Channel
+stdChan han = Channel write rd []
+    where
+        write = hPutStrLn han
+        rd = hGetLine han
+\end{minted}
+Where the write function simply becomes (hPutStrLn han), which prints a string into a handle (appending a newline) and read becomes (hGetLine han). As mentioned before, with standard channels only one of these will work at a time, but it is left to the programmer not to mix them up. In the main module these channels are created and assigned to their standard names when the program is started.
+
+\subsubsection{Dummy Channels}
+As it stands, there is only ever one dummy channel running at one time while phi is running. It is accesible through the variable "localnet". It is designed to be used to pass messages between channels running in a single process (which can itself obviously be built of several concurrent and sequential processes). We originally had dummy channels as a special subset of Socket Channels. This worked well enough, but we felt there was a lot of overhead for what could essentially be achieved
+with the implementation that we ended up with. That implementation is a wrapper around the Control.Concurrent.Chan \cite{hack:chan} type. This is a model of an unbounded FIFO channel, implemented as a linked list of MVars \cite{hack:mvar}, which are mutable variables. 
+
+\begin{minted}[linenos,frame=lines]{hs}
+newDummyChan :: IO Channel
+newDummyChan = do
+    chan <- Chan.newChan
+    return (Channel (Chan.writeChan chan) (Chan.readChan chan) [])
+\end{minted}
+%TODO types?
+So in this case we write our string to the write end of the channel and then read our string from the read end of the channel.
+\subsubsection{Socket Channels}
+Where the implementation of the other two channel types was somewhat trivial, the third Channel type is where most of the meat of our implementation comes. We can build a socket channel using the newChan function.
+
+\begin{minted}[linenos,frame=lines]{hs}
+newChan :: BuildType -> String -> Integer -> IO Channel
+newChan t host port =
+            case t of
+                Init    -> newChanServer port
+                Connect -> newChanClient host port
+\end{minted}
+To this function we pass a BuiltType, which is either Init or Connect, a hostname, and a port. In the case of an Init build, we ignore the host, as we are building the server end of the channel on this machine on port "port". If we are connecting, then we are building the client end to some foreign server.
+
+\begin{minted}[linenos,frame=lines]{hs}
+newChanServer :: Integer -> IO Channel
+newChanServer cp = N.withSocketsDo $ do
+    hanVar <- newEmptyMVar
+    _ <- forkIO $ do
+        sock <- N.listenOn $ N.PortNumber $ fromIntegral cp
+        (clientHandle,_,_)  <- N.accept sock
+        putMVar hanVar clientHandle
+    currentHost <- getHostName
+    let ex = makeExtra [hostSig,portSig] [currentHost, show cp]
+    return (Channel (send' hanVar) (receive' hanVar) ex)
+\end{minted}\footnote{N.withSocketsDo is a function for initialising sockets on Windows, on Unix systems it does nothing}
+
+So with a ChanServer, we create a new MVar, and then create a thread using forkIO \cite{hack:io} which listens on a socket at port "cp", and then accepts the first connection. Once we have accepted a connection, we place the handle generated by this and place it in the MVar we created before the call to forkIO. Next we create our extra data for this channel. We get the hostname of the current machine, and use the function makeExtra to make our serialising data "hack".
+
+
+\begin{minted}[linenos,frame=lines]{hs}
+newChanClient :: String -> Integer -> IO Channel
+newChanClient hostName hostPort = N.withSocketsDo $ do
+    hanVar <- newEmptyMVar
+    _ <- forkIO $ do
+        serverHandle <- waitForConnect hostName $ N.PortNumber $ fromIntegral hostPort
+        putMVar hanVar serverHandle
+        return (Channel (send' hanVar) (receive' hanVar) ex)
+    where
+       ex = makeExtra [hostSig, portSig] [hostName,  show hostPort]
+\end{minted}
+
+
 \subsection{Processes}
 \label{sec:processes}
 

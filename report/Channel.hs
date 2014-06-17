@@ -52,8 +52,9 @@ newChanClient hostName hostPort = N.withSocketsDo $ do
     _ <- forkIO $ do
         serverHandle <- waitForConnect hostName $ N.PortNumber $ fromIntegral hostPort
         putMVar hanVar serverHandle
-    let ex = makeExtra [hostSig, portSig] [hostName,  show hostPort]
     return $ Channel (send' hanVar) (receive' hanVar) ex
+    where
+       ex = makeExtra [hostSig, portSig] [hostName,  show hostPort]
 
 waitForConnect :: N.HostName -> N.PortID -> IO Handle
 waitForConnect h p = N.connectTo h p `catchIOError`

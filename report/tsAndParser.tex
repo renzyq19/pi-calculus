@@ -175,7 +175,7 @@ eqvVal (Term t1)  (Term t2) = t1 == t2
 eqvVal _ _ = False
 \end{minted}
 
-Our show implementation is uninteresting, besides for showing Channels. This is essentially a hack for serialising channels\footnote{When we receive a term in a phi process, we check to see whether it has the special name "<chan>" and then try to build a channel from the data in the arguments, we go into this in more detail in section\ref{sec:serialisingChannels}}
+Our show implementation is uninteresting, besides for showing Channels. This is essentially a hack for serialising channels\footnote{When we receive a term in a phi process, we check to see whether it has the special name "$<$chan$>$" and then try to build a channel from the data in the arguments, we go into this in more detail in section\ref{sec:serialisingChannels}}
 
 \subsubsection{Environment}
 \label{sec:environment}
