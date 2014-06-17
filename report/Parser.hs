@@ -60,7 +60,6 @@ parseNew = do
             parseSeq $ New name
             <?> "parse new"
 
-
 parseIf :: Parser PiProcess
 parseIf = do
             _ <- string "if" 
@@ -89,11 +88,11 @@ parseAtom = do
             atom <- parseTerm 
             parseSeq $ Atom atom 
 
-padded1 :: Parser a -> Parser ()
-padded1 p = do 
-         skipMany1 space
+padded :: Parser a -> Parser ()
+padded p = do 
+         spaces
          _ <- p
-         skipMany1 space
+         spaces
 
 paddedChar :: Char ->  Parser ()
 paddedChar ch = padded $ char ch
@@ -101,20 +100,20 @@ paddedChar ch = padded $ char ch
 paddedStr :: String -> Parser ()
 paddedStr str = padded $ string str
 
-padded :: Parser a -> Parser ()
-padded p = do 
-         spaces
+paddedComma :: Parser ()
+paddedComma = paddedChar ','
+
+padded1 :: Parser a -> Parser ()
+padded1 p = do 
+         skipMany1 space
          _ <- p
-         spaces
+         skipMany1 space
 
 paddedChar1 :: Char ->  Parser ()
 paddedChar1 ch = padded1 $ char ch
 
 paddedStr1 :: String -> Parser ()
 paddedStr1 str = padded1 $ string str
-
-paddedComma :: Parser ()
-paddedComma = paddedChar ','
 
 parseCondition :: Parser Condition
 parseCondition = do

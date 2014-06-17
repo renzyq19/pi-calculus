@@ -138,7 +138,7 @@ We have a single constructor, Channel, which takes two functions and a list of s
 The actual implementation of a Channel is left deliberately vague, to allow for many different types of channels to be built. In section \ref{sec:channels} we give our implementations.
 
 \subsubsection{Values}
-
+\label{sec:values}
 Values are the data type we use to represent all of our types in the single environment we pass around our evaluation strategy (see section \ref{sec:main})
 
 \begin{minted}[linenos,frame=lines]{hs}
@@ -236,7 +236,7 @@ So a TermFun is a function which takes a list of Terms and can either throw an e
 
 As mentioned in section \ref{sec:bgparsing} we have used Parsec in order to build our parser. The Parser module exports the following functions:
 
-\begin{minted}[linenos,frame=lines]{hs}
+\begin{minted}{hs}
 readTerm :: String -> ThrowsError Term 
 readProcess :: String -> ThrowsError PiProcess
 readProcesses :: String -> ThrowsError [PiProcess]
@@ -244,6 +244,131 @@ readProcesses :: String -> ThrowsError [PiProcess]
 
 All three of which take a String and they return a Term, a PiProcess or a list or PiProcesses respectively in the ThrowsError monad. 
 
+However, these are just wrappers around the two workhorses of this module, which are
+\begin{minted}{hs}
+parseTerm :: Parser Term
+\end{minted}
+and 
+\begin{minted}{hs}
+parseProcess :: Parser PiProcess
+\end{minted}
+
+\subsubsection{parseTerm}
+As we have already said, when building parsers in Parsec, we construct a larger parser from a set of smaller parsers.
+The body of parseTerm is as follows:
+\begin{minted}[linenos,frame=lines]{hs}
+parseTerm =  try parseAnonChan
+         <|> try parseTFun
+         <|> parseTVar
+         <|> parseTNum
+         <|> parseTStr
+         where
+            parseAnonChan = do
+                _ <- char '{'
+                spaces
+                arg <- many parseTerm
+                spaces
+                _ <- char '}'
+                return (TFun "anonChan" arg)
+\end{minted}
+
+So when we parse a term, we first try to parse an anonymous channel, which is represented as a TFun (more on this in section \ref{sec:channels}) and then a general TFun, then a TNum, then a TVar, and finally a TStr.
+The final two are somewhat uninteresting,  but the parseTFun and parseTVar functions contain a couple of special cases.
+
+\begin{minted}[linenos,frame=lines]{hs}
+parseTFun :: Parser Term
+parseTFun = do
+            name <- readVar
+            spaces
+            args <- bracketed $ sepBy parseTerm paddedComma
+            return $ case (name,args) of
+                ("pair", t1:t2:_)  -> TPair (t1,t2)
+                ("list", _ )       -> TList args
+                _                  -> TFun  name args 
+\end{minted}
+
+In most cases this parser will return a TFun, but in the case that the name of the TFun we are parsing is "pair" we return a TPair, and in the case that it is "list" we return a TList.
+
+\begin{minted}[linenos,frame=lines]{hs}
+parseTVar :: Parser Term
+parseTVar = do
+        v <- readVar
+        case v of
+            "true"  -> return $ TBool True
+            "false" -> return $ TBool False
+            _       -> do
+                t <- myOptionMaybe parseType (paddedChar ':') 
+                return (TVar v t)
+\end{minted}
+
+This parser has an "escape clause" for TBools. When the variable we have parsed is "true" or "false" we return the appropriate TBool. In the case that it is neither, we then attempt to parse the Type of the variable when there may or may not be one. We do this using the myOptionMaybe parser, which has the type:
+
+\begin{minted}{hs}
+myOptionMaybe :: Show b => Parser a -> Parser b -> Parser (Maybe a)
+\end{minted}
+
+So given a parser of some type a, and a parser of something b which is an instance of Show, we return a parser of type Maybe a. Here we pass myOptionMaybe a Parser Type and a Parser Char (Char being an instance of Show) and this will give us a Parser Maybe Type, with Maybe Type being the type of the second argument to the TVar constructor.
+
+myOptionMaybe is in fact just a specialist call to a more general function myOption
+\begin{minted}{hs}
+myOptionMaybe parser = myOption Nothing (liftM Just parser)
+\end{minted}
+
+myOption being defined as:
+
+\begin{minted}{hs}
+myOption :: Show b => a -> Parser a -> Parser b -> Parser a
+myOption opt parser sep = try (notFollowedBy sep >> return opt) <|> (sep >> parser)
+\end{minted}
+
+This function is used several times throughout parseTerm and parseProcess. When given a parser for a separator, we check if the separator can be parsed using notFollowedBy. If not then we return the first argument to myOption, opt (of type a), however, if it can be parsed (i.e. notFollowedBy fails) then we parse it, ignoring its result, and then use the parser "parser" to continue parsing the rest of the input.
+
+There is in fact a function option (and associated optionMaybe) in the Parsec library, which does nearly the same thing. However, they consume input even if the sep parser fails, which was causing havoc with our implementation, and so we wrote our own version.
+
+\subsubsection{parseTerm}
+\begin{minted}[linenos,frame=lines]{hs}
+parseProcess :: Parser PiProcess
+parseProcess = liftM (\ps -> case ps of 
+                        [p] -> p
+                        _   -> Conc ps) (sepBy1 parseProcess' (char '|'))
+    where
+    parseProcess'  = bracketed parseProcess'' <|> parseProcess''
+    parseProcess'' = parseNull 
+                 <|> try parseIf
+                 <|> parseIn 
+                 <|> parseOut
+                 <|> parseLet
+                 <|> parseReplicate
+                 <|> parseNew
+                 <|> parseAtom
+\end{minted}
+
+This function is best looked at backwards. From line 7, we have the main bulk of the parser, i.e. the combination of the smaller parsers. In line 6 we see a bit of fidgeting for the parsing of bracketed processes, and in line 4 we see that we separate these (potentially bracketed) processes with a | character. The lambda function in lines 2-4 simply avoids unnecessary nesting of singleton lists in Conc constructors. 
+
+Of note here is the lack of a parser for sequentially composed processes. The reason for this is that only a subset of processes can actually be composed sequentially. That is to say, In,Out,New, and Atom. As such parseSeq is only called within the parsers for these four. Also of note with regards to the parseSeq parser is that any process that can be sequentially composed with another, can very well be composed with the Null process, which can either be written explicitly
+or through omission of a proceeding semicolon and process. This is achieved using the myOption parser we have previously mentioned:
+
+\begin{minted}{hs}
+parseSeq :: PiProcess -> Parser PiProcess
+parseSeq p1 = do
+            p2 <- myOption Null parseProcess (paddedChar ';')
+            return (p1 `Seq` p2)
+\end{minted}
+
+The final subsection of the parser we will discuss is parseLet.
+
+\begin{minted}[linenos,frame=lines]{hs}
+parseLet :: Parser PiProcess
+parseLet = do
+            _ <- string "let"
+            spaces
+            name <- parseTerm
+            paddedChar1 '='
+            val <- try (liftM Proc parseProcess) <|> liftM Term parseTerm
+            p <- myOptionMaybe parseProcess (paddedStr1 "in") 
+            return (Let name val p)
+\end{minted}
+
+This is interesting because not only do we have the potential for a let clause without an "in" which is handled by myOptionMaybe, but we also have the possibility of either parsing a process or a term for the value which is being assigned to the variable. Because of this we must use either the Proc or Term constructors to turn the PiProcess or Term into a Value\footnote{\ref{sec:values}}
+
 The full code for our parser implementation can be found in appendix \ref{sec:parserimplementation}
-
-
