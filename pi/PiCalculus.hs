@@ -7,7 +7,6 @@ import Control.Monad (liftM, liftM2, unless, void)
 import Control.Monad.Trans (liftIO)
 import Control.Monad.Trans.Except (catchE, runExceptT, throwE)
 import Data.IORef (newIORef, readIORef,writeIORef)
-import Data.Maybe (isJust)
 import Network.HTTP.Base (Request(..),Response(..), parseResponseHead, parseRequestHead)
 import System.Environment (getArgs, getProgName)
 import System.IO (hFlush, stderr, stdin, stdout)
@@ -25,31 +24,16 @@ import TypDefs
 nullEnv :: IO Env
 nullEnv = newIORef Map.empty
 
-isBound :: Env -> String -> IO Bool
-isBound envRef var = liftM (isJust . Map.lookup var) $ readIORef envRef
-
 getVar :: Env -> String -> IOThrowsError Value 
 getVar envRef var = do env <- liftIO $ readIORef envRef
                        maybe (throwE $ UnboundVar "Getting an unbound variable" var)
                              return
                              (Map.lookup var env)
-
-setVar :: Env -> String -> Value -> IOThrowsError Value
-setVar envRef var val = do env <- liftIO $ readIORef envRef
-                           maybe (throwE $ UnboundVar "Setting an unbound variable" var)
-                                 (return $ liftIO $ writeIORef envRef $ Map.insert var val env)
-                                 (Map.lookup var env)
-                           return val
                            
-defineVar :: Env -> String -> Value -> IOThrowsError Value
-defineVar envRef var val = do
-    alreadyDefined <- liftIO $ isBound envRef var
-    if alreadyDefined
-        then setVar envRef var val >> return val
-        else liftIO $ do
-            env      <- readIORef envRef
-            writeIORef envRef $ Map.insert var val env
-            return val
+defineVar :: Env -> String -> Value -> IOThrowsError ()
+defineVar envRef var val = liftIO $ do
+         env      <- readIORef envRef
+         writeIORef envRef $ Map.insert var val env
 
 bindVars :: Env -> [(String , Value)] -> IO Env
 bindVars envRef bindings = do
@@ -163,7 +147,7 @@ extractInt num =
 assignFreePort :: Env -> IOThrowsError Integer
 assignFreePort env = do
             Term (TNum port) <- getVar env counterRef
-            _ <- setVar env counterRef $ Term $ TNum $ port + 1
+            defineVar env counterRef $ Term $ TNum $ port + 1
             if port == 2 ^ (16 :: Integer)
                 then error "HOW MANY CHANNELS DO YOU WANT?!" 
                 else return port
@@ -240,7 +224,7 @@ eval env (Conc procs)  = do
 eval env (p1 `Seq` p2) = do
                 eval env p1
                 eval env p2
-eval env (New var@(TVar name _)) = void $ defineVar env name $ Term var
+eval env (New var@(TVar name _)) = defineVar env name $ Term var
 eval env (If b p1 p2) = do
                 cond <- evalCond env b
                 eval env (if cond then p1 else p2)
@@ -250,14 +234,11 @@ eval env (Let (TVar name _) (Term t2) (Just p)) = do
                 eval newEnv p
 eval env (Let (TVar name _) (Term t2) Nothing) = do
                 val <- evalTerm env t2
-                _ <- defineVar env name val
-                return ()
+                defineVar env name val
 eval env (Let (TVar name _) proc@(Proc _) (Just p)) = do
                 newEnv <- liftIO $ bindVars env [(name,proc)]
                 eval newEnv p
-eval env (Let (TVar name _) proc@(Proc _) Nothing) = do
-                _ <- defineVar env name proc
-                return ()
+eval env (Let (TVar name _) proc@(Proc _) Nothing) = defineVar env name proc
 eval env (Let (TFun name args) t2 (Just p)) = 
             defineLocalFun env name args t2 p
 eval env (Let (TFun name args) t2 Nothing)  = 
@@ -293,7 +274,7 @@ eval env (Atom p) = do
 eval _ _ = throwE $ Default "undefined action"
 
 defineGlobalFun :: Env -> String -> [Term] -> Value -> IOThrowsError ()
-defineGlobalFun env name args term = void $ defineVar env name $ makeFun args term env
+defineGlobalFun env name args term = defineVar env name $ makeFun args term env
 
 defineLocalFun :: Env -> String -> [Term] -> Value -> PiProcess -> IOThrowsError ()
 defineLocalFun env name args term p = do

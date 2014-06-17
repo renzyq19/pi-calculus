@@ -1,2 +1,19 @@
-\section{Evaluation and Running}
+\section{Evaluation Strategy and Bringing it All Together}
 \label{sec:main}
+\subsection{Evaluation Strategy Influence}
+Having never written an interpreter before, we did some research as to how one might go about doing so. We quickly found Jonathan Tang's Wikibook "Write Yourself a Scheme" \cite{wyas}, which breaks down the construction of an interpreter for the Scheme Lisp dialect. While obviously not entirely translatable to our own project, we undertook this particular tutorial, and found the exercise a very helpful basis for creating an interpreter of our own.
+
+\subsection{Main module}
+The main module of our program is the PiCalculus module. This module essentially acts to join together the previously mentioned modules and adds some further functionality. 
+There are three main functions of this module
+\begin{enumerate}
+    \item Evaluation of our Data structures including
+        \begin{enumerate}
+            \item Handling the Environment
+            \item Handling function application
+        \end{enumerate}
+    \item Handling information received from Channels appropriately
+    \item Handling user input
+\end{enumerate}
+
+

@@ -40,14 +40,14 @@ The functions which achieve this are:
 makeExtra :: [String] -> [String] -> [String]
 makeExtra = zipWith (\a b -> (a ++ dataBreak : b))
 \end{minted}
-which zips two lists of strings together with a special character in the middle (currently it is just '#') to make our extra strings; 
+which zips two lists of strings together with a special character in the middle (currently it is just '\#') to make our extra strings; 
 \begin{minted}[frame=lines]{hs}
 showValue (Chan c)  = show (convert c)
     where 
         convert ch = TFun "<chan>" (map TStr ex) 
             where ex = extra ch
 \end{minted}
-which makes the "$\lt$chan$\gt$" TFun;
+which makes the "$<$chan$>$" TFun;
 and 
 \begin{minted}[frame=lines]{hs}
 getChannelData :: [String] -> Maybe (String, Integer)
@@ -57,9 +57,9 @@ getChannelData strs = do
         port         <- lookup portSig ex
         return (host,read port)
 \end{minted}
-on which breaks down the strings int their constituent parts on the receiving end. This final function will fail and return Nothing if the data is incomplete, or corrupted.
+on which breaks down the strings into their constituent parts on the receiving end. This final function will fail and return Nothing if the data is incomplete, or corrupted.
 
-We have no qualms about admitting that the serialisation/deserialisation mechanism we have in place for Channels is a bit of a "hack", piggy backing on our ability to parse a special "<chan>" TFun at the receiving end, but as it stands it works perfectly well, and it allows us to implement some interesting and exciting features.
+We have no qualms about admitting that the serialisation/de-serialisation mechanism we have in place for Channels is a bit of a "hack", piggy backing on our ability to parse a special "<chan>" TFun at the receiving end, but as it stands it works perfectly well, and it allows us to implement some interesting and exciting features.
 
 \subsubsection{Standard Channels}
 These are a simple wrapper around the three standard input and output channels stdin, stdout, and stderr.
@@ -76,7 +76,7 @@ stdChan han = Channel write rd []
 Where the write function simply becomes (hPutStrLn han), which prints a string into a handle (appending a newline) and read becomes (hGetLine han). As mentioned before, with standard channels only one of these will work at a time, but it is left to the programmer not to mix them up. In the main module these channels are created and assigned to their standard names when the program is started.
 
 \subsubsection{Dummy Channels}
-As it stands, there is only ever one dummy channel running at one time while phi is running. It is accesible through the variable "localnet". It is designed to be used to pass messages between channels running in a single process (which can itself obviously be built of several concurrent and sequential processes). We originally had dummy channels as a special subset of Socket Channels. This worked well enough, but we felt there was a lot of overhead for what could essentially be achieved
+As it stands, there is only ever one dummy channel running at one time while phi is running. It is accessible through the variable "localnet". It is designed to be used to pass messages between channels running in a single process (which can itself obviously be built of several concurrent and sequential processes). We originally had dummy channels as a special subset of Socket Channels. This worked well enough, but we felt there was a lot of overhead for what could essentially be achieved
 with the implementation that we ended up with. That implementation is a wrapper around the Control.Concurrent.Chan \cite{hack:chan} type. This is a model of an unbounded FIFO channel, implemented as a linked list of MVars \cite{hack:mvar}, which are mutable variables. 
 
 \begin{minted}[linenos,frame=lines]{hs}
@@ -88,6 +88,7 @@ newDummyChan = do
 %TODO types?
 So in this case we write our string to the write end of the channel and then read our string from the read end of the channel.
 \subsubsection{Socket Channels}
+\label{sec:socketChannels}
 Where the implementation of the other two channel types was somewhat trivial, the third Channel type is where most of the meat of our implementation comes. We can build a socket channel using the newChan function.
 
 \begin{minted}[linenos,frame=lines]{hs}
@@ -97,7 +98,7 @@ newChan t host port =
                 Init    -> newChanServer port
                 Connect -> newChanClient host port
 \end{minted}
-To this function we pass a BuiltType, which is either Init or Connect, a hostname, and a port. In the case of an Init build, we ignore the host, as we are building the server end of the channel on this machine on port "port". If we are connecting, then we are building the client end to some foreign server.
+To this function we pass a BuildType, which is either Init or Connect, a hostname, and a port. In the case of an Init build, we ignore the host, as we are building the server end of the channel on this machine on port "port". If we are connecting, then we are building the client end to some foreign server.
 
 \begin{minted}[linenos,frame=lines]{hs}
 newChanServer :: Integer -> IO Channel
@@ -110,10 +111,12 @@ newChanServer cp = N.withSocketsDo $ do
     currentHost <- getHostName
     let ex = makeExtra [hostSig,portSig] [currentHost, show cp]
     return (Channel (send' hanVar) (receive' hanVar) ex)
-\end{minted}\footnote{N.withSocketsDo is a function for initialising sockets on Windows, on Unix systems it does nothing}
+\end{minted}
+\footnote{N.withSocketsDo is a function for initialising sockets on Windows, on Unix systems it does nothing}
 
-So with a ChanServer, we create a new MVar, and then create a thread using forkIO \cite{hack:io} which listens on a socket at port "cp", and then accepts the first connection. Once we have accepted a connection, we place the handle generated by this and place it in the MVar we created before the call to forkIO. Next we create our extra data for this channel. We get the hostname of the current machine, and use the function makeExtra to make our serialising data "hack".
-
+So with a ChanServer, we create a new MVar, and then create a thread using forkIO \cite{hack:io} which listens on a socket at port "cp", and then accepts the first connection. Once we have accepted a connection, we place the handle generated by this and place it in the MVar we created before the call to forkIO. Next we create our extra data for this channel. We get the hostname of the current machine, and use the function makeExtra to make our serialising data "hack". We then pass
+"hanVar" to send' and receive' to create the send and receive functions.
+We will discuss send' and receive' momentarily
 
 \begin{minted}[linenos,frame=lines]{hs}
 newChanClient :: String -> Integer -> IO Channel
@@ -122,12 +125,53 @@ newChanClient hostName hostPort = N.withSocketsDo $ do
     _ <- forkIO $ do
         serverHandle <- waitForConnect hostName $ N.PortNumber $ fromIntegral hostPort
         putMVar hanVar serverHandle
-        return (Channel (send' hanVar) (receive' hanVar) ex)
+    return (Channel (send' hanVar) (receive' hanVar) ex)
     where
        ex = makeExtra [hostSig, portSig] [hostName,  show hostPort]
 \end{minted}
 
+With a ChanClient, we create an MVar again into which we will place a handle, and again fork a thread using forkIO. This forked thread then waits until a connection is made to the given host and port number, and places the handle made from this connection into the MVar. Again we pass the MVar containing the handle to send' and receive' for our send and receive functions.
+
+\paragraph{send' and receive' and emptyHandle}
+
+These three functions are all helpers to socket channel construction.
+
+send' simply takes the handle from the given MVar and print the given string into the handle
+\begin{minted}[linenos,frame=lines]{hs}
+send' :: MVar Handle -> String -> IO ()
+send' hanVar msg = do
+        han <- takeMVar hanVar
+        hPutStrLn han msg
+        putMVar hanVar han
+\end{minted}
+
+receive' reads the handle from the MVar (that is to say, it does not remove it), and then empties it using emptyHandle
+\begin{minted}[linenos,frame=lines]{hs}
+receive' :: MVar Handle -> IO String
+receive' hanVar = do
+        han <- readMVar hanVar
+        fmap unlines (emptyHandle han)
+\end{minted}
+
+emptyHandle gets a line from the handle, then checks to see whether the handle contains any more input, assuming not if an error is thrown, and then returns the retrieved line in a singleton list if there is no more input or if there is we recurse on emptyHandle h. This function will return a list of strings containing the contents of a handle.\footnote{There is a function hGetContents in the System.IO module \cite{hack:io}, however it leaves the handle it is called on "semi-closed" with
+no way of taking it out of this state, so we had to implement our own version}
+\begin{minted}[linenos,frame=lines]{hs}
+emptyHandle :: Handle -> IO [String]
+emptyHandle h = do
+    line <- hGetLine h
+    more <- hReady h `catchIOError` (\_ -> return False)
+    if more
+        then fmap (line:) (emptyHandle h)
+        else return [line]
+\end{minted}
+
+These socket handles are very versatile in and of themselves. They can be used to connect to other phi instances, or indeed to service running on any port on any machine.
+
+\subsubsection{Other Handle Types}
+As we mentioned at the start of this section, it is entirely possible to create a handle which at first might not seem useful, but is still compatible with our system. One could imagine creating a channel which produced random strings from a seed string sent to it, which might have some cryptographical use. Or perhaps a channel connected directly to a database of some description. Our implementation is completely open to this kind of extension.
 
 \subsection{Processes}
 \label{sec:processes}
+When it came to deciding how to implement Processes, we had a couple of options. We briefly considered the System.Process module and a few other variants, but quickly came to realise that GHC threads were our best bet. They are lightweight, and provide level of concurrency we need without being overly complicated. We will discuss how these are used in section \ref{sec:main}  
+
 
