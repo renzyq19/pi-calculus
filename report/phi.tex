@@ -381,7 +381,7 @@ sendOut chan val = liftIO $ send chan (show val)
 \end{minted}
 Sending out on channels is simple. We first check if the thing we are trying to send is a channel, and if it is, if that channel is serialisable. If not, we throw an error, in every other case we simply convert the object into a string using show and then send it out onto the channel.
 
-
+\label{sec:receiveIn}
 \begin{minted}[linenos,frame=lines]{hs}
 receiveIn :: Channel -> Maybe Type -> IOThrowsError Term
 receiveIn chan t = do

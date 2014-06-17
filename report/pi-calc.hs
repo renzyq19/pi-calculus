@@ -10,7 +10,8 @@ data PiProcess =
 -- Perform two Processes sequentially
 
 -- We can then define how our data type is to be printed, 
--- here we choose to make it identical to the original input for readability:
+-- here we choose to make it identical to the original 
+-- input for readability:
 instance Show PiProcess where
     show (In c m) =  "in(" ++ c ++ "," ++ m ++ ")"
     show (Out c m) =  "out(" ++ c ++ "," ++  m ++ ")"
