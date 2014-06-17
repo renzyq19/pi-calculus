@@ -65,3 +65,22 @@ let process =
     !(&clientA(pkA,skA,pkB))|!(&serverB(pkB,skB)))
 \end{code}
 
+\subsection{Following Redirects and Getting a Resource}
+
+Here we load the follow file, containing the follow function we saw earlier and demonstrate its use.
+
+\begin{code}
+let follow(ch,r) = (out(ch,r);in(ch,resp:HttpResponse);
+    let list(c,_,h,b) = resp in
+        if c = 302 
+            then let req = httpReq(getHeader("location",resp),headers(),httpGet()) in &follow(ch,req) 
+            else &print(b)) 
+\end{code}
+\begin{code}
+&load("pilude.pi");
+&load("follow.pi");
+&print("Host:");in(stdin,site);
+&print("Resource:");in(stdin,res);
+let siteChan = httpChan(site) in
+    let req = httpReq(uri(site,res),headers(),httpGet()) in &follow(siteChan,req)
+\end{code}

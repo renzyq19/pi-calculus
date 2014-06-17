@@ -100,12 +100,35 @@ and if we were to load this file into the REPL, we could call the functions like
 \begin{code}
     phi> &load("defs.pi")
     phi> let p = &print(10)
-    phi> &forever(print(10))
+    phi> &forever(&p)
     10
     10
     10
     ..
 \end{code}
 
+You can compose components concurrently using '|', which does not have spaces around it.
+\begin{code}
+    phi> out(localnet,"hello")|in(localnet,msg);out(stdout,msg)
+    "hello"
+\end{code}
 
+You can reserve variable names using the "new" process:
+\begin{code}
+    phi>out(stdout,s)
+    Getting an undefined variable: s
+    phi>new s
+    phi>out(stdout,s)
+    s
+\end{code}
 
+You can use conditionals like so:
+\begin{code}
+    phi>if a = true then out(stdout,a) else out(stdout,b)
+\end{code}
+where the else clause is optional
+
+Finally we can execute an infinite number of process P concurrently by calling 
+\begin{code}
+    phi> !(&P)
+\end{code}

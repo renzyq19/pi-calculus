@@ -6,3 +6,7 @@ First, and most importantly, we would completely redesign the cryptographic func
 Secondly, there is currently an issue whereby one cannot pass a process into a function directly, one must first create a let binding to the process, and then pass it to the function. This is not game changing, but it would help with clarity when defining recursive functions.
 
 Thirdly, it would be nice to play around with the idea of non-standard channels (that is to say channels that generate random data, or channels connected to databases directly). Random channels could certainly help us cryptographically: we could use them to generate nonces for example.
+
+We feel that this is a project with a lot of scope for growth in the future. Lots of small extensions, such as adding support for HTTPS, could improve it dramatically.
+
+Ultimately, we would like to see the program become a tool to bridge the gap between protocol and implementation, which we believe it has the potential to be some day.

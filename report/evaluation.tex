@@ -10,7 +10,9 @@ When we set out on this project, we said that there were 6 things we would like 
     \item Fully interoperable compiled models
 \end{enumerate}
 And that we would consider the project a success if we were to achieve the first 3 of these fully, and at least one of the following three partially.
-As the current implementation stands, we have actually achieved 4/6 of our desired goals, but not the ones we thought wew would. We had achieved items 1,2,and 5 within the first month and a bit of full-time work on the project. Item 4 was almost a given through careful design of our program. However, where we have failed is in our aims to really test our implementation in real life protocols. This is mostly a result of our poor implementation of cryptographic functions. It is just not
+As the current implementation stands, we have actually achieved 5/6 of our desired goals, but not the ones we thought wew would. We had achieved items 1,2,and 5 within the first month and a bit of full-time work on the project. Item 4 was almost a given through careful design of our program. The most difficult was in fact item 3, and subsequently item 6. We did, however eventually manage to implement the handshake protocol in phi, which is in appendix \ref{sec:handshake}.
+Where we have failed is in our aims to really test our implementation in real life protocols. This is mostly a result of our poor implementation of cryptographic functions. It is just not
 possible to model real-world protocols without them, and this is a serious oversight on our part. However, having said that, the protocol definitions we have seen tend to treat all their encryption and hashing functions as impenetrable black boxes, which is partly what makes them so hard to implement.
 We have been able to build a very responsive interpreter for the complete language, which is built well enough that it would not be impossible to fix the issues we have eventually.
+Overall, we would say this project has been successful. The program is not without its issues, and we did not achieve all our goals, but it is definitely a tool which could be very useful once we've worked out a few of the kinks.
 
