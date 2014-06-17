@@ -123,7 +123,8 @@ newChanClient :: String -> Integer -> IO Channel
 newChanClient hostName hostPort = N.withSocketsDo $ do
     hanVar <- newEmptyMVar
     _ <- forkIO $ do
-        serverHandle <- waitForConnect hostName $ N.PortNumber $ fromIntegral hostPort
+        serverHandle <- waitForConnect hostName $ 
+                    N.PortNumber $ fromIntegral hostPort
         putMVar hanVar serverHandle
     return (Channel (send' hanVar) (receive' hanVar) ex)
     where

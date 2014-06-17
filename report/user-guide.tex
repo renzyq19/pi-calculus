@@ -107,7 +107,7 @@ and if we were to load this file into the REPL, we could call the functions like
     ..
 \end{code}
 
-You can compose components concurrently using '|', which does not have spaces around it.
+You can compose components concurrently using \verb!|!, which does not have spaces around it.
 \begin{code}
     phi> out(localnet,"hello")|in(localnet,msg);out(stdout,msg)
     "hello"

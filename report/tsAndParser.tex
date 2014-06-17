@@ -318,7 +318,8 @@ myOption being defined as:
 
 \begin{minted}{hs}
 myOption :: Show b => a -> Parser a -> Parser b -> Parser a
-myOption opt parser sep = try (notFollowedBy sep >> return opt) <|> (sep >> parser)
+myOption opt parser sep = try (notFollowedBy sep >> return opt) 
+                        <|> (sep >> parser)
 \end{minted}
 
 This function is used several times throughout parseTerm and parseProcess. When given a parser for a separator, we check if the separator can be parsed using notFollowedBy. If not then we return the first argument to myOption, opt (of type a), however, if it can be parsed (i.e. notFollowedBy fails) then we parse it, ignoring its result, and then use the parser "parser" to continue parsing the rest of the input.
@@ -330,7 +331,8 @@ There is in fact a function option (and associated optionMaybe) in the Parsec li
 parseProcess :: Parser PiProcess
 parseProcess = liftM (\ps -> case ps of 
                         [p] -> p
-                        _   -> Conc ps) (sepBy1 parseProcess' (char '|'))
+                        _   -> Conc ps) 
+                        (sepBy1 parseProcess' (char '|'))
     where
     parseProcess'  = bracketed parseProcess'' <|> parseProcess''
     parseProcess'' = parseNull 

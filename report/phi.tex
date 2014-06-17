@@ -206,7 +206,8 @@ would not raise an exception. This is something we would address in future.
 
 \begin{minted}[frame=lines]{hs}
 eval env (Replicate proc) = 
-    liftIO (threadDelay 100000) >> eval env (Conc [proc, Replicate proc])
+    liftIO (threadDelay 100000) >> 
+        eval env (Conc [proc, Replicate proc])
 \end{minted}
 Replicated processes are evaluated using Conc. There is a delay added because without it we quickly run out of memory. GHC threads may be lightweight, but nothing lightweight enough to spawn ad infinitum.
 
@@ -251,7 +252,8 @@ eval env (Atom (TFun "load" [TStr file])) = do
     eval env $ foldl Seq Null procs
 eval env (Atom (TVar "env" Nothing)) = do
     e <- liftIO $ readIORef env
-    liftIO $ mapM_ (\ (k,v) -> putStrLn $ k ++ ": " ++ show v) $ Map.toAscList e
+    liftIO $ mapM_ (\ (k,v) -> putStrLn $ k ++ ": " ++ show v) 
+                $ Map.toAscList e
 eval env (Atom p@(TFun{})) = void $ evalProcess env p
 eval env (Atom p) = do
     proc <- evalProcess env p
@@ -277,7 +279,8 @@ evalTerm env (TPair (t1,t2)) = do
     b <- evalTerm env t2
     case (a,b) of 
         (Term c, Term d) -> return $ Term $ TPair (c,d)
-        _                -> throwE (Default "pair not given two terms")
+        _                -> throwE
+                    (Default "pair not given two terms")
 \end{minted}
 with lists and pairs we must recursively apply evalTerm to each element to fully evaluate the structure. However because evalTerm returns IOThrowsError Value, we must also check that each item returned into these structures is still a Term. extractTerms does this over a list (throwing an error if it comes across a non-term value), but with pairs we do this manually, as there are only two elements. 
 
@@ -292,7 +295,7 @@ evalTerm env (TFun "anonChan" [n]) = do
     return $ Chan c
 \end{minted}
 As we saw in section \ref{subsec:parser} an anonChan can be entered by the user using either the full name, or the shortcut syntax (a pair of curly braces, either with a number in between or empty). This is how we create the server end of a channel in phi. An anonChan with a number as an argument\footnote{This is a bit of a misnomer in this instance, but the name stuck around by association with the second usage} creates the server end of a channel at the specified port. An empty anonChan assigns the channel a free port\footnote{This is currently also a "hack". There is a variable in the environment with a name that the parser cannot parse, and which we use to refer to the next free ephemeral
-port. Again, currently this starts at the lowest possible ephemeral port ($2^[15]+2^[14]$) and counts upwards, but it would not be too much of a stretch to have it assign a non-allocated one in the range.} This might seem slightly bizarre at first - how is someone supposed to connect to a port whose number one does not know. The included sample program \ref{sec:clientserverfancy} demonstrate how one might use such functionality.
+port. Again, currently this starts at the lowest possible ephemeral port ($2^{15}+2^{14}$) and counts upwards, but it would not be too much of a stretch to have it assign a non-allocated one in the range.} This might seem slightly bizarre at first - how is someone supposed to connect to a port whose number one does not know. The included sample program \ref{sec:clientserverfancy} demonstrate how one might use such functionality.
 \begin{minted}[linenos,frame=lines]{hs}
 evalTerm env (TFun "httpChan" [a]) = do
     host <- evalToString env a
@@ -356,7 +359,8 @@ eval env (Let t1 (Term t2) Nothing) = do
         Term term -> do
             bindings <- liftThrows (match t1 term)
             mapM_ (uncurry (defineVar env)) bindings
-            _         -> throwE (Default "Can only pattern match against Terms")
+            _         -> throwE 
+            (Default "Can only pattern match against Terms")
 eval env (Let t1 (Term t2) (Just p)) = do
     val <- evalTerm env t2 
     case val of 
@@ -364,7 +368,8 @@ eval env (Let t1 (Term t2) (Just p)) = do
             bindings <- liftThrows $ match t1 term
             newEnv <- liftIO $ bindVars env bindings
             eval newEnv p
-            _         -> throwE (Default "Can only pattern match against Terms")
+            _         -> throwE 
+                (Default "Can only pattern match against Terms")
 \end{minted}
 In the first case we evaluate the term to the right of the "=", assert that it is still a term, get the bindings from our match function, and monadically map defineVar over the bindings, and in the second case we do exactly the same but call bindVars to create a new local environment.
 
@@ -375,8 +380,8 @@ The last thing our Main module needs to do is handle data going into and coming 
 \begin{minted}[linenos,frame=lines]{hs}
 sendOut :: Channel -> Value -> IOThrowsError () 
 sendOut chan v@(Chan c) = if serialisable c
-                    then liftIO $ send chan $ show v
-                    else throwE $ Default "Channel not serialisable" 
+            then liftIO $ send chan $ show v
+            else throwE $ Default "Channel not serialisable" 
 sendOut chan val = liftIO $ send chan (show val)
 \end{minted}
 Sending out on channels is simple. We first check if the thing we are trying to send is a channel, and if it is, if that channel is serialisable. If not, we throw an error, in every other case we simply convert the object into a string using show and then send it out onto the channel.
