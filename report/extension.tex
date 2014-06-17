@@ -1,2 +1,8 @@
 \section{Further Extensions}
 \label{sec:extension}
+If we were to continue with this project there would be several things we would fix before we started extending the program. 
+First, and most importantly, we would completely redesign the cryptographic functionality of the system. We would look at various different options, either adopting the Unsafe route, or perhaps moving them into their own module with the ability to access the IO monad. Which ever way we go about it, it is a high priority, as the language is basically neutered with respect to modelling security protocols if it has poor cryptographic functionality.
+
+Secondly, there is currently an issue whereby one cannot pass a process into a function directly, one must first create a let binding to the process, and then pass it to the function. This is not game changing, but it would help with clarity when defining recursive functions.
+
+Thirdly, it would be nice to play around with the idea of non-standard channels (that is to say channels that generate random data, or channels connected to databases directly). Random channels could certainly help us cryptographically: we could use them to generate nonces for example.

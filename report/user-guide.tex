@@ -85,3 +85,27 @@ i.e.
 \end{code}
 
 
+If we have a file of definitions like the one above, we can load them into the current environment using the atom 
+\begin{code}
+    &load("filename.pi")
+\end{code}
+
+This introduces us to the concept of atoms. An atom is a function which represents a process. We can define them just as we can define functions over terms:
+\begin{code}
+    let forever(proc) = &proc;&forever(proc)
+    let print(msg)    = out(stdout,msg)     
+\end{code}
+
+and if we were to load this file into the REPL, we could call the functions like so:
+\begin{code}
+    phi> &load("defs.pi")
+    phi> let p = &print(10)
+    phi> &forever(print(10))
+    10
+    10
+    10
+    ..
+\end{code}
+
+
+

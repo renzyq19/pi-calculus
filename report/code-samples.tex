@@ -1,2 +1,39 @@
 \section{Code Samples}
+
+\subsection{Simple One-Shot Chat Server}
+
+\begin{code}
+let client = 
+    out(stdout,"Enter Host"); in(stdin,host);
+    out(stdout,"Enter Port"); in(stdin,port);
+        let ch = chan(host,port) in
+            in(stdin,msg);out(ch,msg);in(ch,msg)
+\end{code}
+
+\begin{code}
+let server = 
+out(stdout,"Enter Port");
+in(stdin,port);
+    let ch = {port} in
+        in(ch,msg);in(stdin,reply);out(ch,reply)
+\end{code}
+
+\subsection{Chat Server with Anonymous Channels}
 \label{sec:clientserverfancy}
+
+\begin{code}
+let server = 
+    out(stdout,"Enter port:"); in(stdin,port);
+    let ch = {port} in 
+        in(ch,sch);in(stdin,msg);out(sch,msg)
+\end{code}
+\begin{code}
+let client = 
+    out(stdout,"Enter host:"); in(stdin,host);
+    out(stdout,"Enter port:"); in(stdin,port);
+    let ch = chan(host,port) in
+        let sch = {} in
+            out(ch,sch);in(sch,msg);out(stdout,msg)
+\end{code}
+
+

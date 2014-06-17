@@ -1,17 +1,16 @@
 \section{Project Evaluation}
 
-There are 6 points of success we would like to achieve over the course of this project. In increasing order of difficulty they are:
+When we set out on this project, we said that there were 6 things we would like to achieve, in increasing order of difficulty.
 \begin{enumerate}
     \item Basic interaction with controlled environment
     \item Moderate coverage of language by compiler (in, out, parallel composition, sequential composition, limited replication, basic types and functions) 
     \item Models for a few more basic protocols, such as a naive handshake protocol
-    \item Responsive concurrency and fast compilation
+    \item Responsive concurrency and fast interpretation
     \item Complete language compilation (pattern matching, de-structuring, user defined functions and types)
     \item Fully interoperable compiled models
 \end{enumerate}
-
-We would consider the project a success if we were to achieve the first 3 of these fully, and at least one of the following three partially.
-
-Overall the aim of this project is to create something which is easy to use, and which can interact with a number of different processes and systems. As we have demonstrated with some of our background research, interaction on a single kind of channel seems feasible, and this makes us optimistic for final product which can achieve our goal. 
-
+And that we would consider the project a success if we were to achieve the first 3 of these fully, and at least one of the following three partially.
+As the current implementation stands, we have actually achieved 4/6 of our desired goals, but not the ones we thought wew would. We had achieved items 1,2,and 5 within the first month and a bit of full-time work on the project. Item 4 was almost a given through careful design of our program. However, where we have failed is in our aims to really test our implementation in real life protocols. This is mostly a result of our poor implementation of cryptographic functions. It is just not
+possible to model real-world protocols without them, and this is a serious oversight on our part. However, having said that, the protocol definitions we have seen tend to treat all their encryption and hashing functions as impenetrable black boxes, which is partly what makes them so hard to implement.
+We have been able to build a very responsive interpreter for the complete language, which is built well enough that it would not be impossible to fix the issues we have eventually.
 

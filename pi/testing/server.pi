@@ -1,3 +1,4 @@
+:q
 &load("pilude.pi");
 out(stdout,"Enter Port");
 in(stdin,port);

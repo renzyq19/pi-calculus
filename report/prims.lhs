@@ -137,7 +137,7 @@ getmsg(sign(x, y))           == y
 checksign(pk(x), sign(x, y)) == true
 \end{code}
 
-meaning that as long as these equalities hold true, then details of the implementation are unimportant. Many of these encoding and decoding cryptographic funtions require random seeding and other stateful operations. Ordinarily, this would not be an issue. However, Haskell is a pure language, and so stateful computations are not the norm, and would require one of two things to acheive: 
+meaning that as long as these equalities hold true, then details of the implementation are unimportant. Many of these encryption and decryption cryptographic funtions require random seeding and other stateful operations. Ordinarily, this would not be an issue. However, Haskell is a pure language, and so stateful computations are not the norm, and would require one of two things to acheive: 
 
 \begin{enumerate}
     \item We could place all the operations of the primitives module into the $IOThrowsError a$ Monad which is an instance of the $MonadIO$ typeclass \cite{hack:monadIO} meaning that we can use $liftIO$ to expose the $IO$ monad and perform stateful computations. This would require lifting all of the $ThrowsError a$ monadic code, which seems wasteful considering that it is only these primitive functions that would require lifting. 
@@ -186,15 +186,15 @@ checksign(pk(k),sign(_,msg)) => false
 Checks whether a message was signed using a given public key.
 
 \begin{code}
-senc(k,msg) => encodedMsg
+senc(k,msg) => encryptedMsg
 sdec(k,senc(k,msg)) => msg
 \end{code}
 
-Symmetrically encode and decode a message given a key.
+Symmetrically encrypt and decode a message given a key.
 
 \begin{code}
-aenc(pk(k),msg) => encodedMsg
+aenc(pk(k),msg) => encryptedMsg
 adec(k,aenc(pk(k),msg)) => msg
 \end{code}
 
-Asymmetrically encode and decode a message with a public key / private key system.
+Asymmetrically encrypt and decrypt a message with a public key / private key system.

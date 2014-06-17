@@ -145,7 +145,7 @@ showValue (PrimitiveFunc _)  = "<primitive>"
 showValue (Func {})          = "<user function>"  
 
 showCond :: Condition -> String
-showCond (t1 `Equals` t2) = show t1 ++ " == " ++ show t2
+showCond (t1 `Equals` t2) = show t1 ++ " = " ++ show t2
 
 showError :: PiError -> String
 showError (UnboundVar message var)      = message ++ ": " ++ var
