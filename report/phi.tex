@@ -291,7 +291,7 @@ evalTerm env (TFun "anonChan" [n]) = do
     c <- liftIO $ newChan Init "localhost" port 
     return $ Chan c
 \end{minted}
-As we saw in section \ref{sec:parsing} an anonChan can be entered by the user using either the full name, or the shortcut syntax (a pair of curly braces, either with a number in between or empty). This is how we create the server end of a channel in phi. An anonChan with a number as an argument\footnote{This is a bit of a misnomer in this instance, but the name stuck around by association with the second usage} creates the server end of a channel at the specified port. An empty anonChan assigns the channel a free port\footnote{This is currently also a "hack". There is a variable in the environment with a name that the parser cannot parse, and which we use to refer to the next free ephemeral
+As we saw in section \ref{subsec:parser} an anonChan can be entered by the user using either the full name, or the shortcut syntax (a pair of curly braces, either with a number in between or empty). This is how we create the server end of a channel in phi. An anonChan with a number as an argument\footnote{This is a bit of a misnomer in this instance, but the name stuck around by association with the second usage} creates the server end of a channel at the specified port. An empty anonChan assigns the channel a free port\footnote{This is currently also a "hack". There is a variable in the environment with a name that the parser cannot parse, and which we use to refer to the next free ephemeral
 port. Again, currently this starts at the lowest possible ephemeral port ($2^[15]+2^[14]$) and counts upwards, but it would not be too much of a stretch to have it assign a non-allocated one in the range.} This might seem slightly bizarre at first - how is someone supposed to connect to a port whose number one does not know. The included sample program \ref{sec:clientserverfancy} demonstrate how one might use such functionality.
 \begin{minted}[linenos,frame=lines]{hs}
 evalTerm env (TFun "httpChan" [a]) = do
@@ -391,6 +391,6 @@ receiveIn chan t = do
             Just HttpResponse -> makeHttpResponse str
             _                 -> liftThrows $ readTerm str
 \end{minted}
-Receiving messages onto a channel is more complicated. We first need to check what type of message we are expecting. The reason for this is that the functions for parsing HTTP Requests and Reponses are completely different, and so the only way we could think of to ascertain which one to use was to leave it up to the programmer. So, the programmer must pass in the type of the variable we are receiving into. We then match that type against HttpRequest or HttpResponse, calling the appropriate
+Receiving messages onto a channel is more complicated. We first need to check what type of message we are expecting. The reason for this is that the functions for parsing HTTP Requests and Responses are completely different, and so the only way we could think of to ascertain which one to use was to leave it up to the programmer. So, the programmer must pass in the type of the variable we are receiving into. We then match that type against HttpRequest or HttpResponse, calling the appropriate
 parsing function, and if it is neither, we assume it is a Term from another instance of phi.
 
