@@ -7,13 +7,187 @@ Having never written an interpreter before, we did some research as to how one m
 The main module of our program is the PiCalculus module. This module essentially acts to join together the previously mentioned modules and adds some further functionality. 
 There are three main functions of this module
 \begin{enumerate}
+    \item Handling user input
     \item Evaluation of our Data structures including
         \begin{enumerate}
-            \item Handling the Environment
+            \item Handling the Environment, which is to say variable assignment
             \item Handling function application
-        \end{enumerat}
+            \item Performing pattern matching
+        \end{enumerate}
     \item Handling information received from Channels appropriately
-    \item Handling user input
 \end{enumerate}
+
+\subsection{User Input}
+
+
+\begin{minted}[linenos,frame=lines]{hs}
+main :: IO ()
+main = do
+        name   <- getProgName
+        args   <- getArgs
+        case args of
+            []  -> runRepl coreBindings
+            [x] -> readFile x >>= runProcess coreBindings 
+            _   -> do
+                    putStrLn           "Use:"
+                    putStrLn $ name ++ " -- Enter the REPL"
+                    putStrLn $ name ++ " [process] -- Run single process"
+
+runProcess :: IO Env -> String -> IO ()
+runProcess core expr = core >>= flip evalAndPrint expr
+
+runRepl :: IO Env -> IO ()
+runRepl core = core >>= until_ quit (readPrompt "phi>") . evalAndPrint
+        where
+            quit = flip any [":quit",":q"] . (==)
+
+until_ :: Monad m => (a -> Bool) -> m a -> (a -> m ()) -> m ()
+until_ pre prompt action = do
+    result <- prompt
+    unless (pre result) (action result >> until_ pre prompt action)
+
+evalString :: Env -> String -> IO String
+evalString env expr = runIOThrows $ liftM show $ liftThrows (readProcess expr) >>= eval env
+
+runIOThrows :: IOThrowsError String -> IO String
+runIOThrows action = liftM extractValue (runExceptT (trapError action))
+
+trapError :: IOThrowsError String -> IOThrowsError String
+trapError action = catchE action (return . show)
+
+evalAndPrint :: Env -> String -> IO ()
+evalAndPrint env expr = do
+            res <- evalString env expr 
+            case res of
+                "()"  -> return ()
+                _     -> putStrLn res
+
+\end{minted}
+
+\subsection{Evaluation of Data structures}
+
+
+\begin{minted}[linenos,frame=lines]{hs}
+eval :: Env -> PiProcess -> IOThrowsError () 
+evalTerm :: Env -> Term -> IOThrowsError Value
+evalCond :: Env -> Condition -> IOThrowsError Bool
+\end{minted}
+
+\subsubsection{Environment}
+
+\begin{minted}[linenos,frame=lines]{hs}
+nullEnv :: IO Env
+nullEnv = newIORef Map.empty
+
+getVar :: Env -> String -> IOThrowsError Value 
+getVar envRef var = do env <- liftIO $ readIORef envRef
+                       maybe (throwE $ UnboundVar "Getting an unbound variable" var)
+                             return
+                             (Map.lookup var env)
+                           
+defineVar :: Env -> String -> Value -> IOThrowsError ()
+defineVar envRef var val = liftIO $ do
+         env      <- readIORef envRef
+         writeIORef envRef $ Map.insert var val env
+
+bindVars :: Env -> [(String , Value)] -> IO Env
+bindVars envRef bindings = do
+                env <- readIORef envRef
+                newIORef $ Map.union (Map.fromList bindings) env
+
+coreBindings :: IO Env
+coreBindings = do
+                n <- nullEnv 
+                e1 <- bindVars n (map (second PrimitiveFunc) primitives) 
+                e2 <- bindVars e1 (map (second Chan) nativeChannels)
+                net <- newDummyChan
+                bindVars e2 [(counterRef, Term $ TNum lowestPort),
+                             ("localnet"     , Chan net)]
+                where 
+                    lowestPort = 2^(15::Integer) + 2^(14::Integer)
+\end{minted}
+
+
+\subsubsection{Function Application}
+
+\begin{minted}[linenos,frame=lines]{hs}
+apply :: Value -> [Value] -> IOThrowsError Value 
+apply (PrimitiveFunc fun) args = do
+                        ts <- extractTerms args
+                        res <- liftThrows $ fun ts
+                        return $ Term res
+apply (Func parms bdy closre) args =
+    if num parms /= num args 
+        then throwE $ NumArgs "user-defined" (num parms) args
+        else do
+             clos <- liftIO (bindVars closre $ zip parms args)
+             case bdy of
+                Term t -> evalTerm clos t
+                Proc p -> eval clos p >> return bdy
+                _      -> throwE $ Default "this function makes no sense"
+    where
+        num = toInteger . length
+apply e _ = throwE $ NotFunction "expecting a function found" (show e)
+\end{minted}
+
+\subsubsection{Pattern Matching}
+
+\begin{minted}[linenos,frame=lines]{hs}
+eval env (Let t1 (Term t2) (Just p)) = do
+                val <- evalTerm env t2 
+                case val of 
+                    Term term -> do
+                        bindings <- liftThrows $ match t1 term
+                        newEnv <- liftIO $ bindVars env bindings
+                        eval newEnv p
+                    _         -> throwE $ Default "Can only pattern match against Terms"
+eval env (Let t1 (Term t2) Nothing) = do 
+                val <- evalTerm env t2 
+                case val of 
+                    Term term -> do
+                        bindings <- liftThrows $ match t1 term
+                        mapM_ (uncurry (defineVar env)) bindings
+                        _         -> throwE (Default "Can only pattern match against Terms")
+\end{minted}
+
+\subsection{Data from Channels}
+
+\begin{minted}[linenos,frame=lines]{hs}
+sendOut :: Channel -> Value -> IOThrowsError () 
+sendOut chan v@(Chan c) = if serialisable c
+                        then liftIO $ send chan $ show v
+                        else throwE $ Default "Channel not serialisable" 
+sendOut chan val = liftIO $ send chan $ show val
+
+
+receiveIn :: Channel -> Maybe Type -> IOThrowsError Term
+receiveIn chan t = do
+        str <- liftIO $ receive chan
+        case t of
+                    Just HttpRequest  -> makeHttpRequest str
+                    Just HttpResponse -> makeHttpResponse str
+                    _                 -> liftThrows $ readTerm str
+
+makeHttpRequest :: String -> IOThrowsError Term
+makeHttpRequest str = do
+    let ls = lines str
+    (r,u, hs) <- case parseRequestHead ls of
+        Left _     -> throwE $ Default "Malformed HTTP Request"
+        Right (r,u,h) -> return (r,u,h)
+    return $ TData $ Req $ Request u r hs (msgBody ls)
+
+makeHttpResponse :: String -> IOThrowsError Term
+makeHttpResponse str = do
+    let ls = lines str
+    (c, r, hs) <- case parseResponseHead ls of
+        Left _     -> throwE $ Default "Malformed HTTP Request"
+        Right (c,r,h) -> return (c,r,h)
+    return $ TData $ Resp (Response c r hs (msgBody ls))
+
+msgBody :: [String] -> String
+msgBody = unlines . dropWhile (/= crlf)
+    where
+        crlf = "\r"
+\end{minted}
 
 

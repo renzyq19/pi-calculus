@@ -31,10 +31,9 @@ getVar envRef var = do env <- liftIO $ readIORef envRef
                              (Map.lookup var env)
                            
 defineVar :: Env -> String -> Value -> IOThrowsError ()
-defineVar envRef var val = do
-            liftIO $ do
-            env      <- readIORef envRef
-            writeIORef envRef $ Map.insert var val env
+defineVar envRef var val = liftIO $ do
+         env      <- readIORef envRef
+         writeIORef envRef $ Map.insert var val env
 
 bindVars :: Env -> [(String , Value)] -> IO Env
 bindVars envRef bindings = do
@@ -66,7 +65,6 @@ main :: IO ()
 main = do
         name   <- getProgName
         args   <- getArgs
-        pilude <- getDataFileName "pilude.pi"
         case args of
             []  -> runRepl coreBindings
             [x] -> readFile x >>= runProcess coreBindings 
@@ -148,7 +146,7 @@ extractInt num =
 assignFreePort :: Env -> IOThrowsError Integer
 assignFreePort env = do
             Term (TNum port) <- getVar env counterRef
-            _ <- defineVar env counterRef $ Term $ TNum $ port + 1
+            defineVar env counterRef $ Term $ TNum $ port + 1
             if port == 2 ^ (16 :: Integer)
                 then error "HOW MANY CHANNELS DO YOU WANT?!" 
                 else return port
@@ -225,7 +223,7 @@ eval env (Conc procs)  = do
 eval env (p1 `Seq` p2) = do
                 eval env p1
                 eval env p2
-eval env (New var@(TVar name _)) = void $ defineVar env name $ Term var
+eval env (New var@(TVar name _)) = defineVar env name $ Term var
 eval env (If b p1 p2) = do
                 cond <- evalCond env b
                 eval env (if cond then p1 else p2)
@@ -235,14 +233,11 @@ eval env (Let (TVar name _) (Term t2) (Just p)) = do
                 eval newEnv p
 eval env (Let (TVar name _) (Term t2) Nothing) = do
                 val <- evalTerm env t2
-                _ <- defineVar env name val
-                return ()
+                defineVar env name val
 eval env (Let (TVar name _) proc@(Proc _) (Just p)) = do
                 newEnv <- liftIO $ bindVars env [(name,proc)]
                 eval newEnv p
-eval env (Let (TVar name _) proc@(Proc _) Nothing) = do
-                _ <- defineVar env name proc
-                return ()
+eval env (Let (TVar name _) proc@(Proc _) Nothing) = defineVar env name proc
 eval env (Let (TFun name args) t2 (Just p)) = 
             defineLocalFun env name args t2 p
 eval env (Let (TFun name args) t2 Nothing)  = 
@@ -278,7 +273,7 @@ eval env (Atom p) = do
 eval _ _ = throwE $ Default "undefined action"
 
 defineGlobalFun :: Env -> String -> [Term] -> Value -> IOThrowsError ()
-defineGlobalFun env name args term = void $ defineVar env name $ makeFun args term env
+defineGlobalFun env name args term = defineVar env name $ makeFun args term env
 
 defineLocalFun :: Env -> String -> [Term] -> Value -> PiProcess -> IOThrowsError ()
 defineLocalFun env name args term p = do
@@ -361,6 +356,7 @@ msgBody = unlines . dropWhile (/= crlf)
 
 todo :: IOThrowsError a
 todo = throwE $ Default "TODO"
+
 
 evalChan :: Env -> Term -> IOThrowsError Channel
 evalChan env t = do
