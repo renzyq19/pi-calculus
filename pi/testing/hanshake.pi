@@ -1,4 +1,0 @@
-let c = localnet
-let P  = new sks; new skc; new s; let pks = pk(sks) in let pkc = pk(skc) in out(c,pks)|out(c,pkc)|!(&PS)|!(&PC)
-let PS = (in(c,xpk); new tag ; new k ; out(c, aenc(xpk, sign(sks,k))); in(c,z); if fst(sdec(k, z)) = tag then &Q)
-let PC = (in(c,y);let y' = adec(skc,y) in let yk = getmsg(y') in if checksign(pks, y') = true then out(c, senc(yk,pair(tag,s))))

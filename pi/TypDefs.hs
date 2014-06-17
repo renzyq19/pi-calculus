@@ -36,7 +36,7 @@ data PiProcess = Null
                | Let Term Value (Maybe PiProcess)
                | If Condition PiProcess PiProcess
                | Atom Term
-                 deriving (Eq)
+                 deriving (Eq,Show)
 
 data Term = TVar Name (Maybe Type)
           | TStr String
@@ -100,7 +100,7 @@ data BuildType = Init
                | Connect
                  deriving (Eq, Show, Read)
 
-instance Show PiProcess where show = showPi
+--instance Show PiProcess where show = showPi
 instance Show Term      where show = showTerm
 instance Show Value     where show = showValue
 instance Show Condition where show = showCond

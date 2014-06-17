@@ -20,6 +20,7 @@ in(stdin,port);
 
 \subsection{Chat Server with Anonymous Channels}
 \label{sec:clientserverfancy}
+Here we create an anonymous channel, send it across to a remote phi, and then communicate along it.
 
 \begin{code}
 let server = 
@@ -36,4 +37,31 @@ let client =
             out(ch,sch);in(sch,msg);out(stdout,msg)
 \end{code}
 
+\subsection{Handshake Protocol}
+\label{sec:handshake}
+
+Here is an implementation of the Handshake protocol written in phi. To run it, open the REPL, \&load("handshake.pi", and you should see an endless string of s's appearing
+
+\begin{code}
+new s
+let c = {9000}
+let c' = chan("localhost",9000)
+let clientA(pkA,skA,pkB) =  
+    (out(c,pkA); in(c,x); 
+    let y = adec(skA,x) in
+    let pair(pkD,j) = getmsg(y) in if pkD = pkB then let k = j in
+    out(c,senc(k,s)))
+let serverB(pkB,skB) = 
+    in(c',pkX);
+    new k;
+    out(c',aenc(pkX,sign(pkB,pair(pkB,k))));
+    in(c',x);
+    let z = sdec(k,x) in out(stdout,z)
+let process = 
+    (new skA;
+    new skB;
+    let pkA = pk(skA) in
+    let pkB = pk(skB) in
+    !(&clientA(pkA,skA,pkB))|!(&serverB(pkB,skB)))
+\end{code}
 
