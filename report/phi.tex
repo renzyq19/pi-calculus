@@ -130,10 +130,11 @@ There are three functions for manipulating the environment
 \end{description}
 \begin{minted}[linenos,frame=lines]{hs}
 getVar :: Env -> String -> IOThrowsError Value 
-getVar envRef var = do env <- liftIO $ readIORef envRef
-                       maybe (throwE $ UnboundVar "Getting an unbound variable" var)
-                             return
-                             (Map.lookup var env)
+getVar envRef var = do 
+        env <- liftIO $ readIORef envRef
+        maybe (throwE $ UnboundVar "Getting an unbound variable" var)
+              return
+              (Map.lookup var env)
 defineVar :: Env -> String -> Value -> IOThrowsError ()
 defineVar envRef var val = liftIO $ do
          env      <- readIORef envRef
@@ -157,21 +158,21 @@ Evaluating Null does nothing, as we would hope.
 
 \begin{minted}[linenos,frame=lines]{hs}
 eval env (In a v@(TVar b t)) = do
-                chan <- evalChan env a
-                term <- receiveIn chan t
-                bindings <- case term of
-                    TFun "<chan>" ex -> do
-                            ch <- decodeChannel ex
-                            return [(b,ch)]
-                    _ -> liftThrows $ match v term
-                mapM_ (uncurry (defineVar env)) bindings
-                return ()
-                    where
-                    decodeChannel e = do
-                        extraStrings <-  mapM extractString e
-                        case getChannelData extraStrings of
-                            Just (h,p)  -> liftM Chan $ liftIO $ newChan Connect h p
-                            Nothing -> throwE $ Default "incomplete data in channel"
+    chan <- evalChan env a
+    term <- receiveIn chan t
+    bindings <- case term of
+        TFun "<chan>" ex -> do
+                ch <- decodeChannel ex
+                return [(b,ch)]
+        _ -> liftThrows $ match v term
+    mapM_ (uncurry (defineVar env)) bindings
+    return ()
+        where
+        decodeChannel e = do
+            extraStrings <-  mapM extractString e
+            case getChannelData extraStrings of
+                Just (h,p)  -> liftM Chan $ liftIO $ newChan Connect h p
+                Nothing -> throwE $ Default "incomplete data in channel"
 \end{minted}
 
 Receiving a message on a channel involves first evaluating the channel. We then pass the channel and the Maybe Type of the variable to our receiveIn function \ref{sec:receiveIn}. We then have a small section of code for our Channel serialisation hack \ref{sec:serialisingChannels}, and then we attempt to match the original variable against the term we received.\footnote{The keen eyed will notice that this will always return a single binding, as we are passing a TVar as the first
@@ -204,7 +205,8 @@ When we evaluate a list of processes concurrently, we first of all create an MVa
 would not raise an exception. This is something we would address in future. 
 
 \begin{minted}[frame=lines]{hs}
-eval env (Replicate proc) = liftIO (threadDelay 100000) >> eval env (Conc [proc, Replicate proc])
+eval env (Replicate proc) = 
+    liftIO (threadDelay 100000) >> eval env (Conc [proc, Replicate proc])
 \end{minted}
 Replicated processes are evaluated using Conc. There is a delay added because without it we quickly run out of memory. GHC threads may be lightweight, but nothing lightweight enough to spawn ad infinitum.
 
@@ -221,13 +223,16 @@ New and If are handled exactly as one would imagine. New simply reserves a name 
 \paragraph{Function Definition}
 Let processes are overloaded with several purposes. We will discuss their use in pattern matching in \ref{sec:letpatterns} One of these is function definition which is achieved using the following three functions:
 \begin{minted}[linenos,frame=lines]{hs}
-defineGlobalFun :: Env -> String -> [Term] -> Value -> IOThrowsError ()
-defineGlobalFun env name args term = defineVar env name $ makeFun args term env
+defineGlobalFun :: Env -> String -> [Term] -> 
+                    Value -> IOThrowsError ()
+defineGlobalFun env name args term = 
+    defineVar env name $ makeFun args term env
 
-defineLocalFun :: Env -> String -> [Term] -> Value -> PiProcess -> IOThrowsError ()
+defineLocalFun :: Env -> String -> [Term] -> 
+                    Value -> PiProcess -> IOThrowsError ()
 defineLocalFun env name args term p = do
-            clos <- liftIO $ bindVars env [(name, makeFun args term env)]
-            eval clos p
+        clos <- liftIO $ bindVars env [(name, makeFun args term env)]
+        eval clos p
 
 makeFun :: [Term] -> Value -> Env -> Value
 makeFun args = Func (map show args)
@@ -239,18 +244,18 @@ Atoms have a few special cases. The special funcion "load" loads in a file full 
 The special file "pilude.pi"\footnote{A play on the Haskell Prelude} is available to load at any time when using phi. The special function env can be used to outpute the current values in the environment. In any other case, we evaluate the given term as a process.
 \begin{minted}[linenos,frame=lines]{hs}
 eval env (Atom (TFun "load" [TStr "pilude.pi"])) = do
-            pilude <- liftIO $ getDataFileName "pilude.pi"
-            eval env (Atom (TFun "load" [TStr pilude]))
+    pilude <- liftIO $ getDataFileName "pilude.pi"
+    eval env (Atom (TFun "load" [TStr pilude]))
 eval env (Atom (TFun "load" [TStr file])) = do
-            procs <- load file  
-            eval env $ foldl Seq Null procs
+    procs <- load file  
+    eval env $ foldl Seq Null procs
 eval env (Atom (TVar "env" Nothing)) = do
-            e <- liftIO $ readIORef env
-            liftIO $ mapM_ (\ (k,v) -> putStrLn $ k ++ ": " ++ show v) $ Map.toAscList e
+    e <- liftIO $ readIORef env
+    liftIO $ mapM_ (\ (k,v) -> putStrLn $ k ++ ": " ++ show v) $ Map.toAscList e
 eval env (Atom p@(TFun{})) = void $ evalProcess env p
 eval env (Atom p) = do
-            proc <- evalProcess env p
-            eval env proc
+    proc <- evalProcess env p
+    eval env proc
 \end{minted}
 \subsubsection{evalTerm}
 
@@ -268,43 +273,43 @@ evalTerm env   (TList ls) = do
     ts <- extractTerms vs
     return $ Term $ TList ts
 evalTerm env (TPair (t1,t2)) = do
-            a <- evalTerm env t1
-            b <- evalTerm env t2
-            case (a,b) of 
-                (Term c, Term d) -> return $ Term $ TPair (c,d)
-                _                -> throwE (Default "pair not given two terms")
+    a <- evalTerm env t1
+    b <- evalTerm env t2
+    case (a,b) of 
+        (Term c, Term d) -> return $ Term $ TPair (c,d)
+        _                -> throwE (Default "pair not given two terms")
 \end{minted}
 with lists and pairs we must recursively apply evalTerm to each element to fully evaluate the structure. However because evalTerm returns IOThrowsError Value, we must also check that each item returned into these structures is still a Term. extractTerms does this over a list (throwing an error if it comes across a non-term value), but with pairs we do this manually, as there are only two elements. 
 
 The only remaining kind of term is the TFun. There are a few special cases we cater for, which are the channel building functions, namely:
 \begin{minted}[linenos,frame=lines]{hs}
 evalTerm env (TFun "anonChan" []) = do
-            port <- assignFreePort env
-            liftM Chan $ liftIO $ newChan Init "localhost" port 
+    port <- assignFreePort env
+    liftM Chan $ liftIO $ newChan Init "localhost" port 
 evalTerm env (TFun "anonChan" [n]) = do
-            port <- evalToInt env n
-            c <- liftIO $ newChan Init "localhost" port 
-            return $ Chan c
+    port <- evalToInt env n
+    c <- liftIO $ newChan Init "localhost" port 
+    return $ Chan c
 \end{minted}
 As we saw in section \ref{sec:parsing} an anonChan can be entered by the user using either the full name, or the shortcut syntax (a pair of curly braces, either with a number in between or empty). This is how we create the server end of a channel in phi. An anonChan with a number as an argument\footnote{This is a bit of a misnomer in this instance, but the name stuck around by association with the second usage} creates the server end of a channel at the specified port. An empty anonChan assigns the channel a free port\footnote{This is currently also a "hack". There is a variable in the environment with a name that the parser cannot parse, and which we use to refer to the next free ephemeral
 port. Again, currently this starts at the lowest possible ephemeral port ($2^[15]+2^[14]$) and counts upwards, but it would not be too much of a stretch to have it assign a non-allocated one in the range.} This might seem slightly bizarre at first - how is someone supposed to connect to a port whose number one does not know. The included sample program \ref{sec:clientserverfancy} demonstrate how one might use such functionality.
 \begin{minted}[linenos,frame=lines]{hs}
 evalTerm env (TFun "httpChan" [a]) = do
-            host <- evalToString env a
-            liftM Chan $ liftIO $ newChan Connect host 80
+    host <- evalToString env a
+    liftM Chan $ liftIO $ newChan Connect host 80
 evalTerm env (TFun "chan" [a,n]) = do
-            host <- evalToString env a
-            port <- evalToInt env n
-            liftM Chan $ liftIO $ newChan Connect host port
+    host <- evalToString env a
+    port <- evalToInt env n
+    liftM Chan $ liftIO $ newChan Connect host port
 \end{minted}
 These two functions connect to a channel at a remote location. httpChan connects to port 80 at the given hostname, and chan can connect to any given host on any given port.
 
 The last case of our evalTerm function is:
 \begin{minted}[linenos,frame=lines]{hs}
 evalTerm env (TFun name args) = do
-            fun <- getVar env name
-            argVals <- mapM (evalTerm env) args
-            apply fun argVals
+    fun <- getVar env name
+    argVals <- mapM (evalTerm env) args
+    apply fun argVals
 \end{minted}
 which fetches the function from the environment, then monadically maps evalTerm over the arguments, and finally applies the function, which we describe below.
 
@@ -318,9 +323,9 @@ apply :: Value -> [Value] -> IOThrowsError Value
 In the case of a primitive function, which acts on Terms only, we extract the terms from this list of Values passed in using extractTerms again, and then apply the function\footnote{which is of type $[$Term$]$ $\rightarrow$ ThrowsError Term} , lift its result into the IOThrowsError monad and return it.
 \begin{minted}[linenos,frame=lines]{hs}
 apply (PrimitiveFunc fun) args = do
-                        ts <- extractTerms args
-                        res <- liftThrows $ fun ts
-                        return $ Term res
+        ts <- extractTerms args
+        res <- liftThrows $ fun ts
+        return $ Term res
 \end{minted}
 
 For a user-defined function our task is a little more difficult. We first check if the function has been passed the correct number of arguments, then we zip the list of Values passed in with the list of parameters that Func contains, and bind those values in the closure of the function. If the function body is a Term, then we simply evaluate it in the closure, if it is a Process then we must first evaluate it and then return they body (as eval has a return type of ()) 
@@ -346,62 +351,46 @@ Here we show how we use our pattern matching utility.
 There are two cases here to cater for "let.." (global) and "let..in.." (local) bindings.
 \begin{minted}[linenos,frame=lines]{hs}
 eval env (Let t1 (Term t2) Nothing) = do 
-                val <- evalTerm env t2 
-                case val of 
-                    Term term -> do
-                        bindings <- liftThrows (match t1 term)
-                        mapM_ (uncurry (defineVar env)) bindings
-                        _         -> throwE (Default "Can only pattern match against Terms")
+    val <- evalTerm env t2 
+    case val of 
+        Term term -> do
+            bindings <- liftThrows (match t1 term)
+            mapM_ (uncurry (defineVar env)) bindings
+            _         -> throwE (Default "Can only pattern match against Terms")
 eval env (Let t1 (Term t2) (Just p)) = do
-                val <- evalTerm env t2 
-                case val of 
-                    Term term -> do
-                        bindings <- liftThrows $ match t1 term
-                        newEnv <- liftIO $ bindVars env bindings
-                        eval newEnv p
-                        _         -> throwE (Default "Can only pattern match against Terms")
+    val <- evalTerm env t2 
+    case val of 
+        Term term -> do
+            bindings <- liftThrows $ match t1 term
+            newEnv <- liftIO $ bindVars env bindings
+            eval newEnv p
+            _         -> throwE (Default "Can only pattern match against Terms")
 \end{minted}
 In the first case we evaluate the term to the right of the "=", assert that it is still a term, get the bindings from our match function, and monadically map defineVar over the bindings, and in the second case we do exactly the same but call bindVars to create a new local environment.
 
 \subsection{Data from Channels}
-\label{sec:sendout}
 
+The last thing our Main module needs to do is handle data going into and coming out of channels.
+\label{sec:sendout}
 \begin{minted}[linenos,frame=lines]{hs}
 sendOut :: Channel -> Value -> IOThrowsError () 
 sendOut chan v@(Chan c) = if serialisable c
-                        then liftIO $ send chan $ show v
-                        else throwE $ Default "Channel not serialisable" 
-sendOut chan val = liftIO $ send chan $ show val
+                    then liftIO $ send chan $ show v
+                    else throwE $ Default "Channel not serialisable" 
+sendOut chan val = liftIO $ send chan (show val)
+\end{minted}
+Sending out on channels is simple. We first check if the thing we are trying to send is a channel, and if it is, if that channel is serialisable. If not, we throw an error, in every other case we simply convert the object into a string using show and then send it out onto the channel.
 
 
+\begin{minted}[linenos,frame=lines]{hs}
 receiveIn :: Channel -> Maybe Type -> IOThrowsError Term
 receiveIn chan t = do
         str <- liftIO $ receive chan
         case t of
-                    Just HttpRequest  -> makeHttpRequest str
-                    Just HttpResponse -> makeHttpResponse str
-                    _                 -> liftThrows $ readTerm str
-
-makeHttpRequest :: String -> IOThrowsError Term
-makeHttpRequest str = do
-    let ls = lines str
-    (r,u, hs) <- case parseRequestHead ls of
-        Left _     -> throwE $ Default "Malformed HTTP Request"
-        Right (r,u,h) -> return (r,u,h)
-    return $ TData $ Req $ Request u r hs (msgBody ls)
-
-makeHttpResponse :: String -> IOThrowsError Term
-makeHttpResponse str = do
-    let ls = lines str
-    (c, r, hs) <- case parseResponseHead ls of
-        Left _     -> throwE $ Default "Malformed HTTP Request"
-        Right (c,r,h) -> return (c,r,h)
-    return $ TData $ Resp (Response c r hs (msgBody ls))
-
-msgBody :: [String] -> String
-msgBody = unlines . dropWhile (/= crlf)
-    where
-        crlf = "\r"
+            Just HttpRequest  -> makeHttpRequest str
+            Just HttpResponse -> makeHttpResponse str
+            _                 -> liftThrows $ readTerm str
 \end{minted}
-
+Receiving messages onto a channel is more complicated. We first need to check what type of message we are expecting. The reason for this is that the functions for parsing HTTP Requests and Reponses are completely different, and so the only way we could think of to ascertain which one to use was to leave it up to the programmer. So, the programmer must pass in the type of the variable we are receiving into. We then match that type against HttpRequest or HttpResponse, calling the appropriate
+parsing function, and if it is neither, we assume it is a Term from another instance of phi.
 
