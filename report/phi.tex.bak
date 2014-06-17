@@ -126,7 +126,7 @@ There are three functions for manipulating the environment
 \begin{description}
     \item[getVar] reads the environment IORef, then looks up the given variable name in the environment map, throwing an error if it does not exist.
     \item[defineVar] reads the environment IORef, then inserts the value into the map with the given name. If the name already exists it is overwritten. We then write the new environment to the original IORef
-    \item[bindVars] reads the environment IORef, then creates a union between the current environment bindings and those in the associative list passed in. Instead of writing over the original IORef, we create a new one which is returned from this function. This allows us to create function closures, and "let...in" bindings easily.
+    \item[bindVars] reads the environment IORef, then creates a union between the current environment bindings and those in the associative list passed in. Instead of writing over the original IORef, we create a new one which is returned from this function. This allows us to create function closures, and "let..in.." bindings easily.
 \end{description}
 \begin{minted}[linenos,frame=lines]{hs}
 getVar :: Env -> String -> IOThrowsError Value 
@@ -254,14 +254,77 @@ eval env (Atom p) = do
 \end{minted}
 \subsubsection{evalTerm}
 
-\subsubsection{Function Application}
+evalTerm is the function we use to evaluate Terms into Values
+
+For TNums, TStrs, TBools, TBSs and TData which are already data in themselves, this is simply a case of passing them to the Term constructor. For other types of Term it is slightly more complicated.
+\begin{minted}[frame=lines]{hs}
+evalTerm env (TVar name _) = getVar env name
+\end{minted}
+when we evaluate a bare variable, we retrieve it's value from the environment
 
 \begin{minted}[linenos,frame=lines]{hs}
+evalTerm env   (TList ls) = do
+    vs <- mapM (evalTerm env) ls
+    ts <- extractTerms vs
+    return $ Term $ TList ts
+evalTerm env (TPair (t1,t2)) = do
+            a <- evalTerm env t1
+            b <- evalTerm env t2
+            case (a,b) of 
+                (Term c, Term d) -> return $ Term $ TPair (c,d)
+                _                -> throwE (Default "pair not given two terms")
+\end{minted}
+with lists and pairs we must recursively apply evalTerm to each element to fully evaluate the structure. However because evalTerm returns IOThrowsError Value, we must also check that each item returned into these structures is still a Term. extractTerms does this over a list (throwing an error if it comes across a non-term value), but with pairs we do this manually, as there are only two elements. 
+
+The only remaining kind of term is the TFun. There are a few special cases we cater for, which are the channel building functions, namely:
+\begin{minted}[linenos,frame=lines]{hs}
+evalTerm env (TFun "anonChan" []) = do
+            port <- assignFreePort env
+            liftM Chan $ liftIO $ newChan Init "localhost" port 
+evalTerm env (TFun "anonChan" [n]) = do
+            port <- evalToInt env n
+            c <- liftIO $ newChan Init "localhost" port 
+            return $ Chan c
+\end{minted}
+As we saw in section \ref{sec:parsing} an anonChan can be entered by the user using either the full name, or the shortcut syntax (a pair of curly braces, either with a number in between or empty). This is how we create the server end of a channel in phi. An anonChan with a number as an argument\footnote{This is a bit of a misnomer in this instance, but the name stuck around by association with the second usage} creates the server end of a channel at the specified port. An empty anonChan assigns the channel a free port\footnote{This is currently also a "hack". There is a variable in the environment with a name that the parser cannot parse, and which we use to refer to the next free ephemeral
+port. Again, currently this starts at the lowest possible ephemeral port ($2^[15]+2^[14]$) and counts upwards, but it would not be too much of a stretch to have it assign a non-allocated one in the range.} This might seem slightly bizarre at first - how is someone supposed to connect to a port whose number one does not know. The included sample program \ref{sec:client_server_fancy} demonstrate how one might use such functionality.
+\begin{minted}[linenos,frame=lines]{hs}
+evalTerm env (TFun "httpChan" [a]) = do
+            host <- evalToString env a
+            liftM Chan $ liftIO $ newChan Connect host 80
+evalTerm env (TFun "chan" [a,n]) = do
+            host <- evalToString env a
+            port <- evalToInt env n
+            liftM Chan $ liftIO $ newChan Connect host port
+\end{minted}
+These two functions connect to a channel at a remote location. httpChan connects to port 80 at the given hostname, and chan can connect to any given host on any given port.
+
+The last case of our evalTerm function is:
+\begin{minted}[linenos,frame=lines]{hs}
+evalTerm env (TFun name args) = do
+            fun <- getVar env name
+            argVals <- mapM (evalTerm env) args
+            apply fun argVals
+\end{minted}
+which fetches the function from the environment, then monadically maps evalTerm over the arguments, and finally applies the function, which we describe below.
+
+\subsubsection{Function Application}
+
+As we saw in section \ref{sec:values} there are two kinds of function both of which are dealt with in our implementation by
+\begin{minted}{hs}
 apply :: Value -> [Value] -> IOThrowsError Value 
+\end{minted}
+
+In the case of a primitive function, which acts on Terms only, we extract the terms from this list of Values passed in using extractTerms again, and then apply the function\footnote{which is of type $[$Term$]$ $\rightarrow$ ThrowsError Term} , lift its result into the IOThrowsError monad and return it.
+\begin{minted}[linenos,frame=lines]{hs}
 apply (PrimitiveFunc fun) args = do
                         ts <- extractTerms args
                         res <- liftThrows $ fun ts
                         return $ Term res
+\end{minted}
+
+For a user-defined function our task is a little more difficult. We first check if the function has been passed the correct number of arguments, then we zip the list of Values passed in with the list of parameters that Func contains, and bind those values in the closure of the function. If the function body is a Term, then we simply evaluate it in the closure, if it is a Process then we must first evaluate it and then return they body (as eval has a return type of ()) 
+\begin{minted}[linenos,frame=lines]{hs}
 apply (Func parms bdy closre) args =
     if num parms /= num args 
         then throwE $ NumArgs "user-defined" (num parms) args
@@ -270,16 +333,25 @@ apply (Func parms bdy closre) args =
              case bdy of
                 Term t -> evalTerm clos t
                 Proc p -> eval clos p >> return bdy
-                _      -> throwE $ Default "this function makes no sense"
+                _      -> throwE (Default "this function makes no sense")
     where
         num = toInteger . length
-apply e _ = throwE $ NotFunction "expecting a function found" (show e)
 \end{minted}
 
 \subsubsection{Pattern Matching}
 \label{sec:letpatterns}
 
+Here we show how we use our pattern matching utility.
+
+There are two cases here to cater for "let.." (global) and "let..in.." (local) bindings.
 \begin{minted}[linenos,frame=lines]{hs}
+eval env (Let t1 (Term t2) Nothing) = do 
+                val <- evalTerm env t2 
+                case val of 
+                    Term term -> do
+                        bindings <- liftThrows (match t1 term)
+                        mapM_ (uncurry (defineVar env)) bindings
+                        _         -> throwE (Default "Can only pattern match against Terms")
 eval env (Let t1 (Term t2) (Just p)) = do
                 val <- evalTerm env t2 
                 case val of 
@@ -288,14 +360,8 @@ eval env (Let t1 (Term t2) (Just p)) = do
                         newEnv <- liftIO $ bindVars env bindings
                         eval newEnv p
                         _         -> throwE (Default "Can only pattern match against Terms")
-eval env (Let t1 (Term t2) Nothing) = do 
-                val <- evalTerm env t2 
-                case val of 
-                    Term term -> do
-                        bindings <- liftThrows (match t1 term)
-                        mapM_ (uncurry (defineVar env)) bindings
-                        _         -> throwE (Default "Can only pattern match against Terms")
 \end{minted}
+In the first case we evaluate the term to the right of the "=", assert that it is still a term, get the bindings from our match function, and monadically map defineVar over the bindings, and in the second case we do exactly the same but call bindVars to create a new local environment.
 
 \subsection{Data from Channels}
 \label{sec:sendout}
