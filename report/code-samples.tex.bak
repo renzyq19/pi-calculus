@@ -40,7 +40,7 @@ let client =
 \subsection{Handshake Protocol}
 \label{sec:handshake}
 
-Here is an implementation of the Handshake protocol written in phi. To run it, open the REPL, \&load("handshake.pi"),type \&process, and you should see an endless string of s's appearing
+Here is an implementation of the Handshake protocol written in phi. To run it, open the REPL, \&load("handshake.pi", and you should see an endless string of s's appearing
 
 \begin{code}
 new s
@@ -73,8 +73,7 @@ Here we load the follow file, containing the follow function we saw earlier and 
 let follow(ch,r) = (out(ch,r);in(ch,resp:HttpResponse);
     let list(c,_,h,b) = resp in
         if c = 302 
-            then let req = httpReq(getHeader("location",resp),headers(),httpGet()) in 
-                &follow(ch,req) 
+            then let req = httpReq(getHeader("location",resp),headers(),httpGet()) in &follow(ch,req) 
             else &print(b)) 
 \end{code}
 \begin{code}

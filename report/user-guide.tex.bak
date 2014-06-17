@@ -85,3 +85,50 @@ i.e.
 \end{code}
 
 
+If we have a file of definitions like the one above, we can load them into the current environment using the atom 
+\begin{code}
+    &load("filename.pi")
+\end{code}
+
+This introduces us to the concept of atoms. An atom is a function which represents a process. We can define them just as we can define functions over terms:
+\begin{code}
+    let forever(proc) = &proc;&forever(proc)
+    let print(msg)    = out(stdout,msg)     
+\end{code}
+
+and if we were to load this file into the REPL, we could call the functions like so:
+\begin{code}
+    phi> &load("defs.pi")
+    phi> let p = &print(10)
+    phi> &forever(&p)
+    10
+    10
+    10
+    ..
+\end{code}
+
+You can compose components concurrently using '|', which does not have spaces around it.
+\begin{code}
+    phi> out(localnet,"hello")|in(localnet,msg);out(stdout,msg)
+    "hello"
+\end{code}
+
+You can reserve variable names using the "new" process:
+\begin{code}
+    phi>out(stdout,s)
+    Getting an undefined variable: s
+    phi>new s
+    phi>out(stdout,s)
+    s
+\end{code}
+
+You can use conditionals like so:
+\begin{code}
+    phi>if a = true then out(stdout,a) else out(stdout,b)
+\end{code}
+where the else clause is optional
+
+Finally we can execute an infinite number of process P concurrently by calling 
+\begin{code}
+    phi> !(&P)
+\end{code}
