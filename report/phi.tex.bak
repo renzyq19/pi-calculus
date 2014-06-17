@@ -7,7 +7,7 @@ Having never written an interpreter before, we did some research as to how one m
 The main module of our program is the PiCalculus module. This module essentially acts to join together the previously mentioned modules and adds some further functionality. 
 There are three main functions of this module
 \begin{enumerate}
-    \item Handling user input
+    \item Handling user input and output
     \item Evaluation of our Data structures including
         \begin{enumerate}
             \item Handling the Environment, which is to say variable assignment
@@ -17,9 +17,11 @@ There are three main functions of this module
     \item Handling information received from Channels appropriately
 \end{enumerate}
 
-\subsection{User Input}
+\subsection{User Input and Output}
 
+In this section we describe how input from the user is brought into our evaluation strategy, and then information is handed back to the user. Many of the ideas here are inspired by \cite{wyas}.
 
+\subsubsection{Running the program}
 \begin{minted}[linenos,frame=lines]{hs}
 main :: IO ()
 main = do
@@ -32,40 +34,84 @@ main = do
                     putStrLn           "Use:"
                     putStrLn $ name ++ " -- Enter the REPL"
                     putStrLn $ name ++ " [process] -- Run single process"
+\end{minted}
 
+Our main function, which is called every time we type "phi" at the command line. When given one argument, we get the contents of the file with that name and then call runProcess on the returned contents.
+
+\begin{minted}[linenos,frame=lines]{hs}
 runProcess :: IO Env -> String -> IO ()
 runProcess core expr = core >>= flip evalAndPrint expr
+\end{minted}
 
-runRepl :: IO Env -> IO ()
-runRepl core = core >>= until_ quit (readPrompt "phi>") . evalAndPrint
-        where
-            quit = flip any [":quit",":q"] . (==)
+runProcess accepts a set of core bindings and then calls eval and print on the string in its second argument
 
-until_ :: Monad m => (a -> Bool) -> m a -> (a -> m ()) -> m ()
-until_ pre prompt action = do
-    result <- prompt
-    unless (pre result) (action result >> until_ pre prompt action)
-
-evalString :: Env -> String -> IO String
-evalString env expr = runIOThrows $ liftM show $ liftThrows (readProcess expr) >>= eval env
-
-runIOThrows :: IOThrowsError String -> IO String
-runIOThrows action = liftM extractValue (runExceptT (trapError action))
-
-trapError :: IOThrowsError String -> IOThrowsError String
-trapError action = catchE action (return . show)
-
+\begin{minted}[linenos,frame=lines]{hs}
 evalAndPrint :: Env -> String -> IO ()
 evalAndPrint env expr = do
             res <- evalString env expr 
             case res of
                 "()"  -> return ()
                 _     -> putStrLn res
-
 \end{minted}
 
-\subsection{Evaluation of Data structures}
+evalAndPrint evaluates a string in a given environment. The case clause here is to avoid "()" being printed every time we evaluate a string to Void\footnote{()}
 
+\begin{minted}[linenos,frame=lines]{hs}
+evalString :: Env -> String -> IO String
+evalString env expr = 
+        runIOThrows $
+        liftM show $ 
+        liftThrows (readProcess expr) >>= eval env
+\end{minted}
+evalString is best understood if we break it down line by line. In line 5,  liftThrows lifts its argument from ThrowsError into IOThrowsError, so the result of readProcess expr (so the result of parsing the string we pass into readProcess) is lifted. This lifted value is then passed into eval env where it is evaluated in the given environment using eval \ref{sec:eval}.
+Once this has been evaluated, we map show over the result of evaluating our parsed expression, and then call runIOThrows on that result, meaning we are now calling runIOThrows on a value of type IOThrowsError String.
+
+\begin{minted}[linenos,frame=lines]{hs}
+runIOThrows :: IOThrowsError String -> IO String
+runIOThrows action = liftM extractValue 
+                     (runExceptT (trapError action))
+
+trapError :: IOThrowsError String -> IOThrowsError String
+trapError action = catchE action (return . show)
+\end{minted}
+
+runIOThrows first calls trapError on the action passed in, which catches an exception thrown in the action and returns it.Then we call runExceptT which has type
+
+\begin{minted}{hs}
+runExceptT :: e m a -> m (Either e a)
+\end{minted}
+
+which for us means
+
+\begin{minted}{hs}
+runExceptT :: PiError IO String -> IO (Either PiError String)
+\end{minted}
+
+Then we lift a call to extractValue to retrieve the value from the Either PiError String
+However, because we have already caught any potential exceptions and returned them in the IOThrowsError monad, we will never encounter a Left in this Either, so we are safe to put a call to error in this function. 
+
+\begin{minted}[linenos,frame=lines]{hs}
+extractValue :: ThrowsError a -> a 
+extractValue (Right v) = v
+extractValue (Left  e) = error (show e)
+\end{minted}
+
+So, backtracking, this now gives us a value of type IO String, which is exactly what we want. 
+
+If however we are passed no arguments, we enter the Read-Eval-Print Loop, where the only function we have not already met is until_, which simply keeps performing a monadic action until(!) a condition is met
+
+\begin{minted}[linenos,frame=lines]{hs}
+runRepl :: IO Env -> IO ()
+runRepl core = core >>= until_ quit 
+               (readPrompt "phi>") . evalAndPrint
+        where
+            quit = flip any [":quit",":q"] . (==)
+\end{minted}
+
+\subsection{Evaluation of Data Structures}
+\label{sec:eval}
+
+The three main functions in evaluation are
 
 \begin{minted}[linenos,frame=lines]{hs}
 eval :: Env -> PiProcess -> IOThrowsError () 
@@ -73,40 +119,31 @@ evalTerm :: Env -> Term -> IOThrowsError Value
 evalCond :: Env -> Condition -> IOThrowsError Bool
 \end{minted}
 
+each of which gets passed the Environment IORef at each call, and a PiProcess, Term, or Condition respectively.
+
 \subsubsection{Environment}
 
+There are three functions for manipulating the environment
+\begin{description}
+    \item[getVar] reads the environment IORef, then looks up the given variable name in the environment map, throwing an error if it does not exist.
+    \item[defineVar] reads the environment IORef, then inserts the value into the map with the given name. If the name already exists it is overwritten. We then write the new environment to the original IORef
+    \item[bindVars] reads the environment IORef, then creates a union between the current environment bindings and those in the associative list passed in. Instead of writing over the original IORef, we create a new one which is returned from this function. This allows us to create function closures, and "let...in" bindings easily.
+\end{description}
 \begin{minted}[linenos,frame=lines]{hs}
-nullEnv :: IO Env
-nullEnv = newIORef Map.empty
-
 getVar :: Env -> String -> IOThrowsError Value 
 getVar envRef var = do env <- liftIO $ readIORef envRef
                        maybe (throwE $ UnboundVar "Getting an unbound variable" var)
                              return
                              (Map.lookup var env)
-                           
 defineVar :: Env -> String -> Value -> IOThrowsError ()
 defineVar envRef var val = liftIO $ do
          env      <- readIORef envRef
          writeIORef envRef $ Map.insert var val env
-
 bindVars :: Env -> [(String , Value)] -> IO Env
 bindVars envRef bindings = do
                 env <- readIORef envRef
-                newIORef $ Map.union (Map.fromList bindings) env
-
-coreBindings :: IO Env
-coreBindings = do
-                n <- nullEnv 
-                e1 <- bindVars n (map (second PrimitiveFunc) primitives) 
-                e2 <- bindVars e1 (map (second Chan) nativeChannels)
-                net <- newDummyChan
-                bindVars e2 [(counterRef, Term $ TNum lowestPort),
-                             ("localnet"     , Chan net)]
-                where 
-                    lowestPort = 2^(15::Integer) + 2^(14::Integer)
+                newIORef (Map.union (Map.fromList bindings) env)
 \end{minted}
-
 
 \subsubsection{Function Application}
 

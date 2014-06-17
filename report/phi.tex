@@ -19,7 +19,7 @@ There are three main functions of this module
 
 \subsection{User Input and Output}
 
-In this section we describe how input from the user is brought into our evaluation strategy, and then information is handed back to the user. Many of the ideas here are inspired by \cite{wywas}.
+In this section we describe how input from the user is brought into our evaluation strategy, and then information is handed back to the user. Many of the ideas here are inspired by \cite{wyas}.
 
 \subsubsection{Running the program}
 \begin{minted}[linenos,frame=lines]{hs}
@@ -43,7 +43,7 @@ runProcess :: IO Env -> String -> IO ()
 runProcess core expr = core >>= flip evalAndPrint expr
 \end{minted}
 
-runProcess accepts a set of core bindings and then calls eval and print on the strin in its second argument
+runProcess accepts a set of core bindings and then calls eval and print on the string in its second argument
 
 \begin{minted}[linenos,frame=lines]{hs}
 evalAndPrint :: Env -> String -> IO ()
@@ -108,49 +108,151 @@ runRepl core = core >>= until_ quit
             quit = flip any [":quit",":q"] . (==)
 \end{minted}
 
-\subsection{Evaluation of Data structures}
+\subsection{Evaluation of Data Structures}
 \label{sec:eval}
+
+The two main functions in evaluation are
 
 \begin{minted}[linenos,frame=lines]{hs}
 eval :: Env -> PiProcess -> IOThrowsError () 
 evalTerm :: Env -> Term -> IOThrowsError Value
-evalCond :: Env -> Condition -> IOThrowsError Bool
 \end{minted}
+
+each of which gets passed the Environment IORef at each call, and a PiProcess, Term, or Condition respectively.
 
 \subsubsection{Environment}
 
+There are three functions for manipulating the environment
+\begin{description}
+    \item[getVar] reads the environment IORef, then looks up the given variable name in the environment map, throwing an error if it does not exist.
+    \item[defineVar] reads the environment IORef, then inserts the value into the map with the given name. If the name already exists it is overwritten. We then write the new environment to the original IORef
+    \item[bindVars] reads the environment IORef, then creates a union between the current environment bindings and those in the associative list passed in. Instead of writing over the original IORef, we create a new one which is returned from this function. This allows us to create function closures, and "let...in" bindings easily.
+\end{description}
 \begin{minted}[linenos,frame=lines]{hs}
-nullEnv :: IO Env
-nullEnv = newIORef Map.empty
-
 getVar :: Env -> String -> IOThrowsError Value 
 getVar envRef var = do env <- liftIO $ readIORef envRef
                        maybe (throwE $ UnboundVar "Getting an unbound variable" var)
                              return
                              (Map.lookup var env)
-                           
 defineVar :: Env -> String -> Value -> IOThrowsError ()
 defineVar envRef var val = liftIO $ do
          env      <- readIORef envRef
          writeIORef envRef $ Map.insert var val env
-
 bindVars :: Env -> [(String , Value)] -> IO Env
 bindVars envRef bindings = do
                 env <- readIORef envRef
-                newIORef $ Map.union (Map.fromList bindings) env
-
-coreBindings :: IO Env
-coreBindings = do
-                n <- nullEnv 
-                e1 <- bindVars n (map (second PrimitiveFunc) primitives) 
-                e2 <- bindVars e1 (map (second Chan) nativeChannels)
-                net <- newDummyChan
-                bindVars e2 [(counterRef, Term $ TNum lowestPort),
-                             ("localnet"     , Chan net)]
-                where 
-                    lowestPort = 2^(15::Integer) + 2^(14::Integer)
+                newIORef (Map.union (Map.fromList bindings) env)
 \end{minted}
 
+
+\subsubsection{eval}
+
+eval is the function which recurses through the whole structure of our processes, evaluating as it goes along. Here we go into the most interesting cases:
+
+
+\begin{minted}[frame=lines]{hs}
+eval _ Null = return ()
+\end{minted}
+Evaluating Null does nothing, as we would hope.
+
+\begin{minted}[linenos,frame=lines]{hs}
+eval env (In a v@(TVar b t)) = do
+                chan <- evalChan env a
+                term <- receiveIn chan t
+                bindings <- case term of
+                    TFun "<chan>" ex -> do
+                            ch <- decodeChannel ex
+                            return [(b,ch)]
+                    _ -> liftThrows $ match v term
+                mapM_ (uncurry (defineVar env)) bindings
+                return ()
+                    where
+                    decodeChannel e = do
+                        extraStrings <-  mapM extractString e
+                        case getChannelData extraStrings of
+                            Just (h,p)  -> liftM Chan $ liftIO $ newChan Connect h p
+                            Nothing -> throwE $ Default "incomplete data in channel"
+\end{minted}
+
+Receiving a message on a channel involves first evaluating the channel. We then pass the channel and the Maybe Type of the variable to our receiveIn function \ref{sec:receiveIn}. We then have a small section of code for our Channel serialisation hack \ref{sec:serialisingChannels}, and then we attempt to match the original variable against the term we received.\footnote{The keen eyed will notice that this will always return a single binding, as we are passing a TVar as the first
+    argument to match. The reason we have it implemented like this is that if in future we figure out how to match on an in without passing in the type of the data we expect as the type of a variable (see section \ref{sec:receiveIn}) it won't require that much of a reshuffle}
+We then monadically map defineVar over our bindings to add them to the environment.
+
+\begin{minted}[linenos,frame=lines]{hs}
+eval env (Out a b) = do 
+                chan <- evalChan env a
+                bVal <- evalTerm env b
+                sendOut chan bVal
+                return ()
+\end{minted}
+When we send out a message on a channel, first we evaluate the channel in our environment, and then our message, calling sendOut. We will discuss this more in section \ref{sec:sendout}
+\begin{minted}[linenos,frame=lines]{hs}
+eval env (Conc procs)  = do
+                var <- liftIO newEmptyMVar 
+                mapM_ (forkProcess var) procs
+                res <- liftIO $ takeMVar var
+                case res of
+                    Left err -> throwE err
+                    Right _  -> return ()
+        where
+            forkProcess var proc = liftIO $ forkIO $ do
+                        res <- runExceptT (eval env proc)
+                        _ <- tryPutMVar var res
+                        return ()
+\end{minted}
+When we evaluate a list of processes concurrently, we first of all create an MVar in which we will store the result of the processes. Then we monadically map forkProcess over the list. forkProcess calls forkIO on each element, and then evaluates each process in a new thread, placing its result in the MVar passed in the call to forkProcess. As it stands, the MVar only contains the result of the first process to finish executing, so if an error were to occure in a longer running process, it
+would not raise an exception. This is something we would address in future. 
+
+\begin{minted}[frame=lines]{hs}
+eval env (Replicate proc) = liftIO (threadDelay 100000) >> eval env (Conc [proc, Replicate proc])
+\end{minted}
+Replicated processes are evaluated using Conc. There is a delay added because without it we quickly run out of memory. GHC threads may be lightweight, but nothing lightweight enough to spawn ad infinitum.
+
+\begin{minted}[linenos,frame=lines]{hs}
+eval env (p1 `Seq` p2) = do
+                eval env p1
+                eval env p2
+\end{minted}
+Evaluating two processes sequentially is handled as one would expect. We evaluate the first and then the second.
+
+New and If are handled exactly as one would imagine. New simply reserves a name in the Environment, and If evaluates the condition and performs the first process if it evaluates to true and the second process if it evaluates to false.
+
+
+\paragraph{Function Definition}
+Let processes are overloaded with several purposes. We will discuss their use in pattern matching in \ref{sec:letpatterns} One of these is function definition which is achieved using the following three functions:
+\begin{minted}[linenos,frame=lines]{hs}
+defineGlobalFun :: Env -> String -> [Term] -> Value -> IOThrowsError ()
+defineGlobalFun env name args term = defineVar env name $ makeFun args term env
+
+defineLocalFun :: Env -> String -> [Term] -> Value -> PiProcess -> IOThrowsError ()
+defineLocalFun env name args term p = do
+            clos <- liftIO $ bindVars env [(name, makeFun args term env)]
+            eval clos p
+
+makeFun :: [Term] -> Value -> Env -> Value
+makeFun args = Func (map show args)
+\end{minted}
+the first two being wrappers (for defining a function locally to the proceeding process or globally) around the third. Function definition is simply the binding of a list of parameters to a Value and, which could be a PiProcess or a Term, and a closure.
+
+\paragraph{Atoms}
+Atoms have a few special cases. The special funcion "load" loads in a file full of let definitions separated by newlines,
+The special file "pilude.pi"\footnote{A play on the Haskell Prelude} is available to load at any time when using phi. The special function env can be used to outpute the current values in the environment. In any other case, we evaluate the given term as a process.
+\begin{minted}[linenos,frame=lines]{hs}
+eval env (Atom (TFun "load" [TStr "pilude.pi"])) = do
+            pilude <- liftIO $ getDataFileName "pilude.pi"
+            eval env (Atom (TFun "load" [TStr pilude]))
+eval env (Atom (TFun "load" [TStr file])) = do
+            procs <- load file  
+            eval env $ foldl Seq Null procs
+eval env (Atom (TVar "env" Nothing)) = do
+            e <- liftIO $ readIORef env
+            liftIO $ mapM_ (\(k,v) -> putStrLn $ k ++ ": " ++ show v) $ Map.toAscList e
+eval env (Atom p@(TFun{})) = void $ evalProcess env p
+eval env (Atom p) = do
+            proc <- evalProcess env p
+            eval env proc
+\end{minted}
+\subsubsection{evalTerm}
 
 \subsubsection{Function Application}
 
@@ -175,6 +277,7 @@ apply e _ = throwE $ NotFunction "expecting a function found" (show e)
 \end{minted}
 
 \subsubsection{Pattern Matching}
+\label{sec:letpatterns}
 
 \begin{minted}[linenos,frame=lines]{hs}
 eval env (Let t1 (Term t2) (Just p)) = do
@@ -184,17 +287,18 @@ eval env (Let t1 (Term t2) (Just p)) = do
                         bindings <- liftThrows $ match t1 term
                         newEnv <- liftIO $ bindVars env bindings
                         eval newEnv p
-                    _         -> throwE $ Default "Can only pattern match against Terms"
+                        _         -> throwE (Default "Can only pattern match against Terms")
 eval env (Let t1 (Term t2) Nothing) = do 
                 val <- evalTerm env t2 
                 case val of 
                     Term term -> do
-                        bindings <- liftThrows $ match t1 term
+                        bindings <- liftThrows (match t1 term)
                         mapM_ (uncurry (defineVar env)) bindings
                         _         -> throwE (Default "Can only pattern match against Terms")
 \end{minted}
 
 \subsection{Data from Channels}
+\label{sec:sendout}
 
 \begin{minted}[linenos,frame=lines]{hs}
 sendOut :: Channel -> Value -> IOThrowsError () 
