@@ -11,10 +11,28 @@
 
 \begin{frame}
 \frametitle{Handshake Protocol}
+\url{http://tools.ietf.org/html/rfc5246#section-7.4}
+
 \end{frame}
 
-\begin{frame}
-\frametitle{Handshake Protocol}
+\begin{frame}[fragile]
+\frametitle{Handshake Protocol in phi}
+\begin{minted}{ocaml}
+let clientA(pkA,skA,pkB) =  
+    (out(c,pkA); in(c,x); 
+    let s = "Secret Message" in
+    let y = adec(skA,x) in
+    let pair(pkD,j) = getmsg(y) in if pkD = pkB then 
+                                        let k = j in
+        out(c,senc(k,s))
+let serverB(pkB,skB) = 
+    in(c',pkX);
+    new k;
+    out(c',aenc(pkX,sign(pkB,pair(pkB,k))));
+    in(c',x);
+    let z = sdec(k,x) in out(stdout,z)
+\end{minted}
+
 \end{frame}
 
 \begin{frame}
@@ -87,11 +105,13 @@ let ls = list(1,pair(2,list(3,4,5)),6) in
 \frametitle{Pattern Matching}
 \begin{minted}{ocaml}
 let follow(ch,r) = (out(ch,r);in(ch,resp:HttpResponse);
-    let list(c,_,_,b) = resp in
-        if c = 302 
-            then let req = httpReq(getHeader("location",resp),headers(),httpGet()) in 
-                &follow(ch,req) 
-            else out(stdout,b)) 
+  let list(c,_,_,b) = resp in
+    if c = 302 
+      then let req = httpReq(getHeader("location",resp),
+                                       headers(),
+                                       httpGet()) in 
+          &follow(ch,req) 
+      else out(stdout,b)) 
 \end{minted}
 \end{frame}
 

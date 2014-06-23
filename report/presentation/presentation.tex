@@ -1,7 +1,7 @@
 \documentclass[t]{beamer}
 \usetheme{iclpt}
-\usepackage{url}
 \usepackage{minted}
+\usepackage{hyperref}
 
 \author{Will de Renzy-Martin}
 \title{phi$>$ The Applied $\pi$-calculus Interpreter}
@@ -10,19 +10,68 @@
 \frame{\maketitle}
 
 \begin{frame}
-\frametitle{Handshake Protocol}
+\frametitle{Handshake Protocol in Plain English}
+\begin{itemize}
+    \item \href{http://tools.ietf.org/html/rfc5246\#section-7.4}{RFC Specification}
+\end{itemize}
 \end{frame}
 
-\begin{frame}
-\frametitle{Handshake Protocol}
+\begin{frame}[fragile]
+\frametitle{Handshake Protocol in phi}
+\begin{minted}{ocaml}
+let clientA(pkA,skA,pkB) =  
+    (out(c,pkA); in(c,x); 
+    let s = "Secret Message" in
+    let y = adec(skA,x) in
+    let pair(pkD,j) = getmsg(y) in if pkD = pkB then 
+                                        let k = j in
+    out(c,senc(k,s)))
+let serverB(pkB,skB) = 
+    in(c',pkX);
+    new k;
+    out(c',aenc(pkX,sign(pkB,pair(pkB,k))));
+    in(c',x);
+    let z = sdec(k,x) in out(stdout,z)
+\end{minted}
+
 \end{frame}
 
 \begin{frame}
 \frametitle{Process Calculi}
+\begin{itemize}
+        \pause
+    \item Communication
+        \pause
+    \item Sequential Composition
+        \pause
+    \item Parallel Composition
+        \pause
+    \item Reduction Semantics
+        \pause
+    \item Hiding 
+        \pause
+    \item Recursion and Replication
+        \pause
+    \item The Null Process
+\end{itemize}
 \end{frame}
 
-\begin{frame}
+\begin{frame}[fragile]
 \frametitle{phi}
+\begin{table}[hc!]
+    \begin{tabular}{l l}
+        \verb!0!                      &  Null Process\\
+        \verb!in(u,M)!                &  Message in\\
+        \verb!out(u,M)!               &  Message out\\
+        \verb!P | Q!                  &  Parallel Composition\\
+        \verb!P ; Q!                  &  Sequential Composition\\
+        \verb?!P?                     &  Replication\\
+        \verb!new x!                  &  Name reservation\\
+        \verb!if p(M) then P else Q!  &  Conditionals\\
+        \verb!let X = M in P!         &  Hiding / Pattern Matching \\
+        \verb!&t!                     &  Function call\\
+    \end{tabular}
+\end{table} 
 \end{frame}
 
 \begin{frame}[fragile]

@@ -1,16 +1,20 @@
-let c = localnet
-let sks = "WAT"
-let P  = new skc; new s; 
-        let pks = pk(sks) in 
-            let pkc = pk(skc) in 
-                out(c,pks)|out(c,pkc)|(&PS)|(&PC)
-let PS = in(c,xpk);out(stdout,xpk);
-            new tag ; new k ; out(c, aenc(xpk, sign(sks,k)));
-                in(c,z); if fst(sdec(k, z)) = tag 
-                    then out(stdout,"YES") 
-                    else out(stdout,"NO")
-let PC = in(c,y); out(stdout,y);
-         let y' = adec(skc,y) in 
-            let yk = getmsg(y') in 
-                if checksign(pks, y') = true 
-                    then out(c, senc(yk,pair(tag,s)))
+let c = {9000}
+let c' = chan("localhost",9000)
+let clientA(pkA,skA,pkB) =  
+    (out(c,pkA); in(c,x); 
+    let s = "Secret Message" in
+    let y = adec(skA,x) in
+    let pair(pkD,j) = getmsg(y) in if pkD = pkB then let k = j in
+    out(c,senc(k,s)))
+let serverB(pkB,skB) = 
+    in(c',pkX);
+    new k;
+    out(c',aenc(pkX,sign(pkB,pair(pkB,k))));
+    in(c',x);
+    let z = sdec(k,x) in out(stdout,z)
+let process = 
+    (new skA;
+    new skB;
+    let pkA = pk(skA) in
+    let pkB = pk(skB) in
+    !(&clientA(pkA,skA,pkB))|!(&serverB(pkB,skB)))
