@@ -1,0 +1,3 @@
+out(stdout,"Enter port:"); in(stdin,port);
+let ch = {port} in 
+    in(ch,sch);in(stdin,msg);out(sch,msg)

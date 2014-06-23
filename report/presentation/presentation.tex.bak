@@ -1,0 +1,125 @@
+\documentclass[t]{beamer}
+\usetheme{iclpt}
+\usepackage{url}
+\usepackage{minted}
+
+\author{Will de Renzy-Martin}
+\title{phi$>$ The Applied $\pi$-calculus Interpreter}
+
+\begin{document}
+\frame{\maketitle}
+
+\begin{frame}
+\frametitle{Handshake Protocol}
+\end{frame}
+
+\begin{frame}
+\frametitle{Handshake Protocol}
+\end{frame}
+
+\begin{frame}
+\frametitle{Process Calculi}
+\end{frame}
+
+\begin{frame}
+\frametitle{phi}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Processes}
+\begin{minted}{hs}
+eval env (Conc procs)  = do
+                var <- liftIO newEmptyMVar 
+                mapM_ (forkProcess var) procs
+                res <- liftIO (takeMVar var)
+                case res of
+                    Left err -> throwE err
+                    Right _  -> return ()
+        where
+            forkProcess var proc = liftIO $ forkIO $ do
+                        res <- runExceptT (eval env proc)
+                        _ <- tryPutMVar var res
+                        return ()
+\end{minted}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Channels}
+\begin{minted}{hs}
+data Channel = Channel {
+               send         :: String -> IO ()
+             , receive      :: IO String
+             , extra        :: [String]
+             }
+\end{minted}
+
+\end{frame}
+
+
+\begin{frame}[fragile]
+\frametitle{Primitives}
+\begin{minted}{hs}
+primitives :: [(Name          , TermFun)]
+primitives = [ ("fst"         , first)
+             , ("snd"         , secnd)
+             , ("hash"        , hash)
+             , ("getmsg"      , getmsg)
+             , ("sdec"        , sdec)
+             , ("senc"        , binaryId "senc")
+             , ("adec"        , adec)
+             , ("aenc"        , binaryId "aenc")
+             , ("sign"        , binaryId "sign")
+             , ("checksign"   , checksign)
+             , ("mac"         , mac) ..]
+\end{minted}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Pattern Matching}
+\begin{minted}{ocaml}
+let ls = list(1,pair(2,list(3,4,5)),6) in 
+    let list(_1,pair(_2,list(_3,x,_5)),_6) = ls in 
+        out(stdout,x)
+\end{minted}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Pattern Matching}
+\begin{minted}{ocaml}
+let follow(ch,r) = (out(ch,r);in(ch,resp:HttpResponse);
+    let list(c,_,_,b) = resp in
+        if c = 302 
+            then let req = httpReq(getHeader("location",resp),headers(),httpGet()) in 
+                &follow(ch,req) 
+            else out(stdout,b)) 
+\end{minted}
+\end{frame}
+
+\begin{frame}
+\frametitle{???}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Installing}
+
+    The source is available on Hackage, and can be installed using cabal:
+    \begin{minted}{shell-session}
+        cabal update
+        cabal install pi-calculus
+    \end{minted}
+
+    Alternatively you can clone the source and build using cabal:
+
+    \begin{minted}{shell-session}
+        git clone git@github:renzyq19/pi-calculus
+        cd pi-calculus/pi
+        cabal install
+    \end{minted}
+\end{frame}
+
+\begin{frame}
+\frametitle{Wrap Up}
+\end{frame}
+
+
+\end{document}

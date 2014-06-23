@@ -1,0 +1,5 @@
+&load("pilude.pi");
+out(stdout,"Enter Host"); in(stdin,host);
+out(stdout,"Enter Port"); in(stdin,port);
+    let ch = chan(host,port) in
+        out_and_in(ch)  

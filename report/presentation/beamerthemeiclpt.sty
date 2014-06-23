@@ -1,0 +1,123 @@
+% ///////////////////////////////////////////////////////////////
+%
+% The provided presentation template `iclpt' is based on the 
+% templates provided with the `beamer' package. The College 
+% logo and the background image were taken from the homepage 
+% of Imperial College London. As far as I understand the images 
+% are provided by Imperial College London for its staff and 
+% students, and for academic and non-profit use only.
+%
+% ///////////////////////////////////////////////////////////////
+%
+% [2010/06/00 v1.1 Imperial College London Presentation Template]
+%
+% Thanks to Claudio Belotti for useful feedback.
+%
+% ///////////////////////////////////////////////////////////////
+%
+%
+% Copyright (c) 2008, Daniel Wagner, www.PrettyPrinting.net
+% 
+% Permission is hereby granted, free of charge, to any person
+% obtaining a copy of this template and associated
+% documentation files (the "Template"), to deal in the Template
+% without restriction, including without limitation the rights to
+% use, copy, modify, merge, publish, distribute, sublicense,
+% and/or sell copies of the Template, and to permit persons to
+% whom the Template is furnished to do so, subject to the
+% following conditions:
+% 
+% The above copyright notice and this permission notice shall be
+% included in all copies or substantial portions of the Template.
+% 
+% THE TEMPLATE IS PROVIDED ``AS IS'', WITHOUT WARRANTY OF ANY KIND,
+% EXPRESSED OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES 
+% OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+% NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+% HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+% WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+% FROM, OUT OF OR IN CONNECTION WITH THE TEMPLATE OR THE USE OR
+% OTHER DEALINGS IN THE TEMPLATE.
+%
+% /////////////////////////////////////////////////////////////////
+
+\definecolor{beamer@icdarkblue}{RGB}{0,51,102}
+\definecolor{beamer@icmiddleblue}{RGB}{0,82,150} 
+\definecolor{beamer@iclightblue}{RGB}{200,212,232}
+\definecolor{beamer@icmiddlered}{RGB}{204,51,0}
+\definecolor{beamer@iclightred}{RGB}{232,212,32}
+
+\setbeamercolor{normal text}{fg=black,bg=white}
+\setbeamercolor{alerted text}{fg=red}
+\setbeamercolor{example text}{fg=green!50!black}
+
+\renewcommand{\emph}{\alert}
+
+\setbeamercolor{structure}{fg=beamer@icmiddleblue}
+
+\setbeamertemplate{blocks}[rounded][shadow=true]
+
+\setbeamercolor{block title}{fg=beamer@iclightblue,bg=beamer@icmiddleblue}
+\setbeamercolor{block body}{fg=beamer@icdarkblue,bg=beamer@iclightblue}
+
+\setbeamercolor{block title alerted}{fg=beamer@iclightred,bg=beamer@icmiddlered}
+\setbeamercolor{block body alerted}{fg=beamer@icmiddlered,bg=beamer@iclightred}
+
+\setbeamercolor{author
+in head/foot}{fg=beamer@iclightblue,bg=beamer@icmiddleblue}
+\setbeamercolor{institute in head/foot}{}
+
+\setbeamercolor*{titlelike}{parent=structure}
+
+\defbeamertemplate*{frametitle}{iclpt theme}
+{
+\begin{beamercolorbox}[center,wd=\textwidth]{frametitle}
+	\usebeamerfont{frametitle}\insertframetitle
+\end{beamercolorbox}%
+}
+
+\defbeamertemplate*{headline}{iclpt theme}
+{%
+\begin{beamercolorbox}[leftskip=.2cm,ht=1.1cm,dp=0.1cm,wd=\textwidth]{institute in head/foot}
+	\includegraphics[height=.9cm]{icl.pdf}
+\end{beamercolorbox}%
+}
+
+\defbeamertemplate*{footline}{iclpt theme}
+{%
+\begin{beamercolorbox}[ht=.55cm,dp=0.4cm,wd=\textwidth,leftskip=.3cm]{author in head/foot}%
+	\begin{minipage}[c]{5cm}%
+	\usebeamerfont{author in head/foot}
+	\insertshortauthor 
+	\insertshorttitle
+	\end{minipage}\hfill% 
+	\begin{minipage}{6cm}
+	\hfill\includegraphics[height=.9cm]{collage.png}
+	\end{minipage}
+\end{beamercolorbox}%
+}
+
+\defbeamertemplate*{title page}{iclpt}[1][]
+{
+  \vbox{}
+  \vfill
+  \begin{centering}
+    \begin{beamercolorbox}[sep=8pt,center,#1]{title}
+      \usebeamerfont{title}\inserttitle\par%
+      \ifx\insertsubtitle\@empty%
+      \else%
+        \vskip0.25em%
+        {\usebeamerfont{subtitle}\usebeamercolor[fg]{subtitle}\insertsubtitle\par}%
+      \fi%     
+    \end{beamercolorbox}%
+    \vskip1em\par
+    \begin{beamercolorbox}[sep=8pt,center,#1]{author}
+      \usebeamerfont{author}\insertauthor
+    \end{beamercolorbox}
+    \begin{beamercolorbox}[sep=8pt,center,#1]{date}
+      \usebeamerfont{institute}\insertdate
+    \end{beamercolorbox}\vskip0.5em
+    {\usebeamercolor[fg]{titlegraphic}\inserttitlegraphic\par}
+  \end{centering}
+  \vfill
+}

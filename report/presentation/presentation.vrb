@@ -1,0 +1,15 @@
+\frametitle{Installing}
+
+    The source is available on Hackage, and can be installed using cabal:
+    \begin{minted}{shell-session}
+        cabal update
+        cabal install pi-calculus
+    \end{minted}
+
+    Alternatively you can clone the source and build using cabal:
+
+    \begin{minted}{shell-session}
+        git clone git@github:renzyq19/pi-calculus
+        cd pi-calculus/pi
+        cabal install
+    \end{minted}

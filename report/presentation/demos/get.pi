@@ -1,0 +1,6 @@
+&load("pilude.pi");
+&load("follow.pi");
+&print("Host:");in(stdin,site);
+&print("Resource:");in(stdin,res);
+let siteChan = httpChan(site) in
+    let req = httpReq(uri(site,res),headers(),httpGet()) in &follow(siteChan,req)

@@ -1,0 +1,20 @@
+let c = {9000}
+new s
+let c' = chan("localhost",9000)
+let clientA(pkA,skA,pkB) =  
+    (out(c,pkA); in(c,x); 
+    let y = adec(skA,x) in
+    let pair(pkD,j) = getmsg(y) in if pkD = pkB then let k = j in
+    out(c,senc(k,s)))
+let serverB(pkB,skB) = 
+    in(c',pkX);
+    new k;
+    out(c',aenc(pkX,sign(pkB,pair(pkB,k))));
+    in(c',x);
+    let z = sdec(k,x) in out(stdout,z)
+let process = 
+    (new skA;
+    new skB;
+    let pkA = pk(skA) in
+    let pkB = pk(skB) in
+    !(&clientA(pkA,skA,pkB))|!(&serverB(pkB,skB)))
