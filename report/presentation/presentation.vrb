@@ -1,5 +1,4 @@
 \frametitle{Installing}
-
     The source is available on Hackage, and can be installed using cabal:
     \begin{minted}{shell-session}
         cabal update

@@ -147,12 +147,20 @@ let follow(ch,r) = (out(ch,r);in(ch,resp:HttpResponse);
 \end{frame}
 
 \begin{frame}
-\frametitle{???}
+\frametitle{Limitations}
+\begin{itemize}
+        \pause
+    \item "Single Shot" Socket Channels
+        \pause
+    \item Cryptographically insecure 
+        \pause
+    \item Hacks
+\end{itemize}
+
 \end{frame}
 
 \begin{frame}[fragile]
 \frametitle{Installing}
-
     The source is available on Hackage, and can be installed using cabal:
     \begin{minted}{shell-session}
         cabal update
@@ -168,8 +176,26 @@ let follow(ch,r) = (out(ch,r);in(ch,resp:HttpResponse);
     \end{minted}
 \end{frame}
 
+
+\begin{frame}
+\frametitle{Demonstrations}
+\begin{itemize}
+\pause
+    \item Simple Client - Server
+\pause
+    \item Secret Channel Client - Server
+\pause
+    \item Follow Redirects
+\end{itemize}
+\end{frame}
+
+
 \begin{frame}
 \frametitle{Wrap Up}
+\begin{itemize}
+\pause
+    \item Questions?
+\end{itemize}
 \end{frame}
 
 
