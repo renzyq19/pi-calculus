@@ -18,10 +18,11 @@ module TypDefs (
 import Control.Monad.Trans.Except(ExceptT(..))
 import Data.Char (toLower)
 import Data.ByteString (ByteString)
+import qualified Data.ByteString.Char8 as C8
 import Data.IORef (IORef)
 import Data.List (intercalate)
 import Data.Map (Map)
-import Network.HTTP.Base (Request, Response)
+import Network.HTTP.Base (Request(..), Response(..), Request_String, Response_String)
 import Network.HTTP.Headers (HasHeaders(..))
 
 import Text.ParserCombinators.Parsec (ParseError)
@@ -36,7 +37,7 @@ data PiProcess = Null
                | Let Term Value (Maybe PiProcess)
                | If Condition PiProcess PiProcess
                | Atom Term
-                 deriving (Eq,Show)
+                 deriving (Eq)
 
 data Term = TVar Name (Maybe Type)
           | TStr String
@@ -49,8 +50,8 @@ data Term = TVar Name (Maybe Type)
           | TFun Name [Term]
             deriving (Eq)
 
-data HttpData = Resp (Response String)
-              | Req  (Request String)
+data HttpData = Resp Response_String
+              | Req  Request_String
 
 instance HasHeaders HttpData where
     getHeaders (Resp r) = getHeaders r
@@ -100,7 +101,7 @@ data BuildType = Init
                | Connect
                  deriving (Eq, Show, Read)
 
---instance Show PiProcess where show = showPi
+instance Show PiProcess where show = showPi
 instance Show Term      where show = showTerm
 instance Show Value     where show = showValue
 instance Show Condition where show = showCond
@@ -131,7 +132,7 @@ showTerm (TBool b ) = map toLower $ show b
 showTerm (TList ls) = "list(" ++ intercalate "," (map show ls) ++ ")"
 showTerm (TPair (a,b)) = "pair("++ show a ++ ","++ show b ++ ")"
 showTerm (TData d) = show d
-showTerm (TBS bs)  = show bs
+showTerm (TBS bs)  = "bs(\"" ++ C8.unpack bs ++ "\")"
 showTerm (TFun n ts) = n ++ "(" ++ intercalate "," (map show ts) ++ ")"
 
 showValue :: Value -> String
@@ -169,7 +170,7 @@ instance Eq Value where (==) = eqvVal
 instance Eq HttpData where (==) = eqHttpData
 
 eqHttpData :: HttpData -> HttpData -> Bool
-eqHttpData _ _ = False
+eqHttpData a b = show a == show b
 
 eqvVal :: Value -> Value -> Bool
 eqvVal (Proc p1)  (Proc p2) = p1 == p2

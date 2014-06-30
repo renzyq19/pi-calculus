@@ -21,7 +21,6 @@
 \begin{minted}{ocaml}
 let clientA(pkA,skA,pkB) =  
     (out(c,pkA); in(c,x); 
-    let s = "Secret Message" in
     let y = adec(skA,x) in
     let pair(pkD,j) = getmsg(y) in if pkD = pkB then 
                                         let k = j in

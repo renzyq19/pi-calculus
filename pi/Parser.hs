@@ -6,6 +6,7 @@ module Parser (
 
 import Control.Monad (liftM)
 import Control.Monad.Error (throwError)
+import qualified Data.ByteString.Char8 as C8
 import Text.ParserCombinators.Parsec
 
 import TypDefs (Condition (..), PiProcess (..), Term (..), Type(..), Value(..), Name, PiError(Parser), ThrowsError)
@@ -141,6 +142,7 @@ parseTFun = do
             return $ case (name,args) of
                 ("pair", t1:t2:_)  -> TPair (t1,t2)
                 ("list", _ )       -> TList args
+                ("bs", [TStr str]) -> TBS $ C8.pack str 
                 _                  -> TFun  name args 
 
 parseTStr :: Parser Term

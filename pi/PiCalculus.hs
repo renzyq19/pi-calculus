@@ -6,6 +6,7 @@ import Control.Concurrent.MVar (newEmptyMVar, takeMVar, tryPutMVar)
 import Control.Monad (liftM, liftM2, unless, void)
 import Control.Monad.Trans (liftIO)
 import Control.Monad.Trans.Except (catchE, runExceptT, throwE)
+import Crypto.Random (SystemRandom,genBytes, newGenIO)
 import Data.IORef (newIORef, readIORef,writeIORef)
 import Network.HTTP.Base (Request(..),Response(..), parseResponseHead, parseRequestHead)
 import System.Environment (getArgs, getProgName)
@@ -224,7 +225,12 @@ eval env (Conc procs)  = do
 eval env (p1 `Seq` p2) = do
                 eval env p1
                 eval env p2
-eval env (New var@(TVar name _)) = defineVar env name $ Term var
+eval env (New (TVar name _)) =do
+        gen <- liftIO newGenIO
+        randomBytes <- case genBytes 16 (gen :: SystemRandom) of
+                        Left  e  -> throwE $ Default $ show e
+                        Right (bs,_) -> return bs
+        defineVar env name $ Term $ TBS randomBytes
 eval env (If b p1 p2) = do
                 cond <- evalCond env b
                 eval env (if cond then p1 else p2)
@@ -306,7 +312,7 @@ runProcess core expr = core >>= flip evalAndPrint expr
 runRepl :: IO Env -> IO ()
 runRepl core = core >>= until_ quit (readPrompt "phi>") . evalAndPrint
         where
-            quit = flip any [":quit",":q"] . (==)
+            quit = (`elem` [":quit",":q"])
 
 until_ :: Monad m => (a -> Bool) -> m a -> (a -> m ()) -> m ()
 until_ pre prompt action = do
@@ -357,7 +363,6 @@ msgBody = unlines . dropWhile (/= crlf)
 
 todo :: IOThrowsError a
 todo = throwE $ Default "TODO"
-
 
 evalChan :: Env -> Term -> IOThrowsError Channel
 evalChan env t = do
